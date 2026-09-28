@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
+<meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f8fafc">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -38,6 +39,31 @@
   .chk { border:2px solid var(--sub); } .chk.on { background:#2563eb; border-color:#2563eb; }
   dialog { border:0; padding:0; background:transparent; max-width:100vw; } dialog::backdrop { background:rgba(2,6,23,.65); }
   .safe-b { padding-bottom:env(safe-area-inset-bottom,0px); } .safe-t { padding-top:env(safe-area-inset-top,0px); }
+
+  .b-zc { background:#e11d48; color:#fff; } .b-zn { background:#7c3aed; color:#fff; }
+  /* Окна добавления: цвета заданы явно, чтобы текст не сливался с фоном */
+  .dlg { background:#ffffff; color:#0f172a; border:1px solid #e2e8f0; }
+  .dlg h3 { color:#0f172a; } .dlg .lbl { color:#475569; }
+  .dlg .fld { background:#ffffff; color:#0f172a; border-color:#cbd5e1; }
+  .dark .dlg { background:#1e293b; color:#ffffff; border-color:#475569; }
+  .dark .dlg h3 { color:#ffffff; } .dark .dlg .lbl { color:#e2e8f0; }
+  .dark .dlg .fld { background:#0f172a; color:#ffffff; border-color:#64748b; }
+  .dark .dlg .fld::placeholder { color:#94a3b8; }
+  .dark .dlg .fld option { background:#0f172a; color:#ffffff; }
+  /* Анимации */
+  @keyframes up { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  @keyframes fade { from { opacity:0; } to { opacity:1; } }
+  @keyframes pop { 0% { transform:scale(.6); } 60% { transform:scale(1.18); } 100% { transform:scale(1); } }
+  @keyframes dlgin { from { opacity:0; transform:translateY(14px) scale(.96); } to { opacity:1; transform:none; } }
+  .enter > .card { animation:up .38s cubic-bezier(.2,.7,.2,1) both; animation-delay:calc(var(--i,0) * 45ms); }
+  .fadein { animation:fade .25s ease both; }
+  dialog[open] { animation:dlgin .22s cubic-bezier(.2,.7,.2,1); }
+  dialog[open]::backdrop { animation:fade .22s ease; }
+  .chk.pop { animation:pop .3s ease; }
+  .card, .inner, .btn2, .btn-main, .btn-inv, .chk { transition:background-color .2s, border-color .2s, opacity .3s, transform .15s, filter .15s; }
+  button:active:not(:disabled) { transform:scale(.96); }
+  .card:hover { border-color:#3b82f6; }
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
@@ -60,6 +86,7 @@
       <button id="prevWeek" class="btn2 px-3 h-9 rounded-lg text-sm">← Предыдущая</button>
       <select id="weekSel" class="fld" style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Неделя"></select>
       <button id="nextWeek" class="btn2 px-3 h-9 rounded-lg text-sm">Следующая →</button>
+      <select id="subSel" class="fld" style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Подгруппа"><option value="0">Обе подгруппы</option><option value="1">Подгруппа 1</option><option value="2">Подгруппа 2</option></select>
       <button id="addLesson" class="btn-inv text-sm px-3 py-1.5 rounded-lg ml-auto">+ Пара</button>
     </div>
     <div id="grid" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
@@ -87,22 +114,22 @@
 </nav>
 
 <dialog id="lessonDlg">
-  <form id="lessonForm" class="card rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+  <form id="lessonForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
     <h3 id="lessonTitle" class="font-semibold text-lg">Пара</h3>
     <input type="hidden" name="id">
-    <label class="block text-sm sub">День
+    <label class="lbl block text-sm">День
       <select name="day" class="fld"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select>
     </label>
     <div class="grid grid-cols-2 gap-3">
-      <label class="block text-sm sub">Начало<input type="time" name="start" required class="fld"></label>
-      <label class="block text-sm sub">Конец<input type="time" name="end" required class="fld"></label>
+      <label class="lbl block text-sm">Начало<input type="time" name="start" required class="fld"></label>
+      <label class="lbl block text-sm">Конец<input type="time" name="end" required class="fld"></label>
     </div>
-    <label class="block text-sm sub">Предмет<input name="name" required class="fld" placeholder="Например, Математика"></label>
-    <label class="block text-sm sub">Преподаватель<input name="teacher" class="fld" placeholder="Иванов И.И."></label>
-    <label class="block text-sm sub">Аудитория<input name="room" class="fld" placeholder="Например, 305"></label>
+    <label class="lbl block text-sm">Предмет<input name="name" required class="fld" placeholder="Например, Математика"></label>
+    <label class="lbl block text-sm">Преподаватель<input name="teacher" class="fld" placeholder="Иванов И.И."></label>
+    <label class="lbl block text-sm">Аудитория<input name="room" class="fld" placeholder="Например, 305"></label>
     <div class="grid grid-cols-2 gap-3">
-      <label class="block text-sm sub">Тип<select name="type" class="fld"><option value="ЛК">Лекция (ЛК)</option><option value="ПЗ">Практика (ПЗ)</option><option value="ЛР">Лабораторная (ЛР)</option></select></label>
-      <label class="block text-sm sub">Повтор<select name="parity" class="fld"><option value="">Каждую неделю</option><option value="odd">Нечётные</option><option value="even">Чётные</option></select></label>
+      <label class="lbl block text-sm">Тип<select name="type" class="fld"><option value="ЛК">Лекция (ЛК)</option><option value="ПЗ">Практика (ПЗ)</option><option value="ЛР">Лабораторная (ЛР)</option><option value="ЗЧ">Зачёт (ЗЧ)</option><option value="ЗН">Занятие (ЗН)</option></select></label>
+      <label class="lbl block text-sm">Повтор<select name="parity" class="fld"><option value="">Каждую неделю</option><option value="odd">Нечётные</option><option value="even">Чётные</option></select></label>
     </div>
     <div class="flex gap-2 pt-2">
       <button type="button" id="lessonDel" class="hidden px-3 py-2 rounded-lg text-sm mr-auto" style="color:#f87171">Удалить</button>
@@ -113,17 +140,17 @@
 </dialog>
 
 <dialog id="hwDlg">
-  <form id="hwForm" class="card rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+  <form id="hwForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
     <h3 id="hwTitle" class="font-semibold text-lg">Домашнее задание</h3>
     <input type="hidden" name="id">
     <div class="grid grid-cols-3 gap-3">
-      <label class="block text-sm sub col-span-2">Предмет<select name="subject" required class="fld"></select></label>
-      <label class="block text-sm sub">Тип<select name="type" class="fld"><option value="">—</option><option>ЛК</option><option>ПЗ</option><option>ЛР</option></select></label>
+      <label class="lbl block text-sm col-span-2">Предмет<select name="subject" required class="fld"></select></label>
+      <label class="lbl block text-sm">Тип<select name="type" class="fld"><option value="">—</option><option>ЛК</option><option>ПЗ</option><option>ЛР</option><option>ЗЧ</option><option>ЗН</option></select></label>
     </div>
     <p id="noSubj" class="hidden text-xs" style="color:#fbbf24">Сначала добавьте пары в расписание — предметы берутся оттуда.</p>
-    <label class="block text-sm sub">Задание<textarea name="text" required rows="3" class="fld" placeholder="Что нужно сделать"></textarea></label>
-    <label class="block text-sm sub">Срок сдачи<input type="datetime-local" name="due" required class="fld"></label>
-    <label class="block text-sm sub">Статус
+    <label class="lbl block text-sm">Задание<textarea name="text" required rows="3" class="fld" placeholder="Что нужно сделать"></textarea></label>
+    <label class="lbl block text-sm">Срок сдачи<input type="datetime-local" name="due" required class="fld"></label>
+    <label class="lbl block text-sm">Статус
       <select name="done" class="fld"><option value="0">В процессе</option><option value="1">Сделано</option></select>
     </label>
     <div class="flex gap-2 pt-2">

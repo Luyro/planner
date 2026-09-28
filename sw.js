@@ -1,4 +1,4 @@
-const CACHE = 'planner-v3';
+const CACHE = 'planner-v4';
 const FILES = ['./', './index.html', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -11,16 +11,18 @@ self.addEventListener('activate', e => {
     .then(() => self.clients.claim()));
 });
 
-// Сначала кэш, параллельно обновляем его из сети (в т.ч. Tailwind с CDN)
+// Свои файлы: сначала сеть (всегда свежий код), при отсутствии интернета — кэш.
+// Внешние (Tailwind CDN): сначала кэш, фоном обновляем.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET' || /allorigins|corsproxy/.test(e.request.url)) return;
-  e.respondWith(caches.match(e.request, { ignoreSearch: true }).then(cached => {
-    const net = fetch(e.request).then(res => {
-      if (res && (res.ok || res.type === 'opaque')) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
-      return res;
-    }).catch(() => cached || caches.match('./index.html'));
-    return cached || net;
-  }));
+  if (e.request.method !== 'GET') return;
+  const same = new URL(e.request.url).origin === self.location.origin;
+  const store = res => { if (res && (res.ok || res.type === 'opaque')) { const c = res.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); } return res; };
+  if (same) {
+    e.respondWith(fetch(e.request).then(store).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html'))));
+  } else {
+    e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request).then(store)));
+    e.waitUntil(fetch(e.request).then(store).catch(() => {}));
+  }
 });
 
 self.addEventListener('notificationclick', e => {

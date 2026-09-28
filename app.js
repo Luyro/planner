@@ -1,19 +1,55 @@
 'use strict';
 /* =====================================================================
-   РАСПИСАНИЕ НА СЕМЕСТР — сюда попадут ваши реальные данные
-   day:    1 = Пн … 6 = Сб
-   weeks:  [1,3,5] — только в эти недели (необязательно)
-   parity: 'odd' (нечётные) | 'even' (чётные) — если пара чередуется (необязательно)
-   без weeks и parity — пара идёт каждую неделю
-   type:   'ЛК' | 'ПЗ' | 'ЛР'
+   РАСПИСАНИЕ НА СЕМЕСТР (из таблицы группы)
+   Строка RAW: [день 1=Пн…6=Сб, пара A–E, недели, предмет, тип, преподаватель, к/ауд, подгруппа]
+   Недели пишутся как в таблице: '2-14', '4,7-15', '3,5,7,9'
    ===================================================================== */
-const SEMESTER_START = '2026-09-01'; // дата 1-го учебного дня семестра (ГГГГ-ММ-ДД)
-const WEEKS_COUNT = 18;
-const SEMESTER_SCHEDULE = [
-  // Пример формата (удалите или замените):
-  // { day: 1, parity: 'odd',  start: '09:00', end: '10:20', name: 'Математика', type: 'ЛК', room: '305', teacher: 'Иванов И.И.' },
-  // { day: 1, weeks: [2, 4],  start: '10:35', end: '11:55', name: 'Физика',     type: 'ЛР', room: '112', teacher: 'Петров П.П.' },
+const SEMESTER_START = '2026-09-01'; // первый учебный день семестра — при необходимости поправьте
+const WEEKS_COUNT = 16;
+const SLOTS = { A: ['11:15', '12:35'], B: ['13:05', '14:25'], C: ['14:35', '15:55'], D: ['16:05', '17:25'], E: ['17:45', '19:05'] };
+const TYPES = { K: 'ЛК', P: 'ПЗ', L: 'ЛР', Z: 'ЗЧ', N: 'ЗН' };
+const SUBJ = { sm: 'Стратегический маркетинг', mu: 'Маркетинг услуг', kh: 'Кураторский час', ek: 'Эконометрика', imk: 'Интегрированные маркетинговые коммуникации', mi: 'Маркетинг инноваций', fsa: 'Функционально-стоимостный анализ', mia: 'Маркетинговые исследования и аналитика', lg: 'Логистика', fk: 'Физическая культура' };
+const TEACH = { sv: 'Сверлов А.С.', sh: 'Шумских И.С.', me: 'Мельникова Л.А.', mk: 'Миксюк С.Ф.', st: 'Стасева А.А.', pu: 'Пушкин С.А.', le: 'Левчук К.А.', an: 'Анкинович Ю.Е.', tr: 'Трушкевич Н.Л.', sy: 'Синявская О.А.', pr: 'Протасеня В.С.', bu: 'Бутеня В.Е.', ko: 'Ковалева О.Л.', ar: 'Артёменко С.В.', vo: 'Волонтей А.В.', de: 'Демченко Е.В.', ve: 'Верниковская О.В.', ya: 'Яровская Е.С.', kp: 'Коптур Д.В.' };
+const RAW = [
+  // понедельник
+  [1,'A','5','sm','K','sv','1/903'], [1,'A','6','mu','P','sh','1/1201'], [1,'A','7','kh','N','me',''],
+  [1,'B','2-14','ek','K','mk','1/703'], [1,'B','15','kh','N','me',''],
+  [1,'C','2','ek','K','mk','1/703'], [1,'C','3-7','ek','P','st','3/239'],
+  [1,'C','8-16','ek','L','pu','2/200',1], [1,'C','8-16','ek','L','st','2/200а',2],
+  [1,'D','3-10','imk','P','le','3/136а'], [1,'D','11-15','imk','L','le','2/218',2],
+  [1,'D','11-14','mi','L','an','3/138',1], [1,'D','16','fsa','P','tr','3/136а'],
+  // вторник
+  [2,'B','3','kh','N','me','1/608'], [2,'B','6-14','mia','L','ar','3/226',1], [2,'B','6-14','sm','L','vo','2/300',2], [2,'B','15','sm','L','vo','2/103',2],
+  [2,'C','1-2','fsa','K','sy','1/1203'], [2,'C','3','fsa','P','tr','3/242'], [2,'C','4,7-15','fsa','P','tr','3/136'], [2,'C','5-6','fsa','P','tr','3/140'],
+  [2,'D','1-14','fsa','K','sy','1/1203'], [2,'E','1-2','mi','K','pr','1/1003'],
+  // среда
+  [3,'A','3,5,7,9','mi','K','pr','1/403'], [3,'A','4,6,8,10,12-13','imk','K','bu','1/403'],
+  [3,'B','1,3-15','mia','K','ko','1/903'], [3,'B','2','mi','K','pr','3/136'],
+  [3,'C','1-2','ek','K','mk','1/1203'], [3,'C','3-9','mi','P','an','1/708'], [3,'C','10-14','mu','P','sh','1/801'], [3,'C','16','fsa','Z','sy','3/136'],
+  [3,'D','1','mi','K','pr','1/1203'], [3,'D','2','imk','K','bu','1/1203'], [3,'D','3-4,14','mu','P','sh','1/801'], [3,'D','5','mu','P','sh','1/706'],
+  [3,'D','10','kh','N','me',''], [3,'D','15','lg','Z','ve','3/136'], [3,'D','16','fsa','Z','sy','3/136'],
+  [3,'E','2','mia','K','ko','1/1203'], [3,'E','3','fsa','K','sy','1/903'], [3,'E','15','lg','Z','ve','3/136'],
+  // четверг
+  [4,'A','4','ek','K','mk','1/603'],
+  [4,'B','1-13','mu','K','de','1/903'], [4,'B','14','mu','P','sh','1/801'], [4,'B','15','sm','L','vo','2/200а',1],
+  [4,'C','1-2','imk','K','bu','1/1203'], [4,'C','3','ek','P','st','1/1105'], [4,'C','4-5','mu','P','sh','1/801'],
+  [4,'C','6-14','mia','L','ar','3/226',2], [4,'C','6-14','sm','L','vo','2/200а',1], [4,'C','15','fsa','P','tr','1/804'],
+  [4,'D','1-2','imk','K','bu','1/1203'], [4,'D','3,7','mu','P','sh','1/801'], [4,'D','8','ek','P','st','3/436'],
+  [4,'E','3','sm','K','sv','1/403'],
+  // пятница
+  [5,'A','1-16','fk','P','kp',''],
+  [5,'B','1','lg','K','ve','1/403'], [5,'B','2','sm','K','sv','1/403'], [5,'B','3-12','sm','P','vo','1/705'],
+  [5,'B','14','imk','L','le','2/218',1], [5,'B','14','mi','L','an','3/138',2], [5,'B','15','imk','L','le','2/200а',1],
+  [5,'C','1-2','lg','K','ve','1/403'], [5,'C','3-14','lg','P','ya','1/705'], [5,'C','15','mi','Z','pr','3/136'],
+  [5,'D','3-11','lg','K','ve','1/703'], [5,'D','14','fsa','K','sy','1/403'], [5,'D','15','mi','Z','pr','3/136'],
+  [5,'E','10','sm','K','sv','1/703'],
+  // суббота
+  [6,'B','1','sm','K','sv','1/403'], [6,'C','1,3-9,11-13','sm','K','sv','1/703'],
+  [6,'D','3-9','mia','P','ar','2/320'], [6,'D','11-13','imk','L','le','2/200',1], [6,'D','11-13','mi','L','an','2/200а',2],
+  [6,'E','9','ek','P','st','2/320']
 ];
+const parseWeeks = s => s.split(',').flatMap(p => { const [a, b] = p.split('-').map(Number); return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a]; });
+const SEMESTER_SCHEDULE = RAW.map(([day, slot, w, s, t, te, room, sub]) => ({ day, start: SLOTS[slot][0], end: SLOTS[slot][1], weeks: parseWeeks(w), name: SUBJ[s], type: TYPES[t], teacher: TEACH[te], room, sub }));
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -28,8 +64,10 @@ let tab = load('tab', 'schedule');
 let filter = 'all';
 
 const DAYS = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-const BCLS = { 'ЛК': 'b-lk', 'ПЗ': 'b-pz', 'ЛР': 'b-lr' };
+const BCLS = { 'ЛК': 'b-lk', 'ПЗ': 'b-pz', 'ЛР': 'b-lr', 'ЗЧ': 'b-zc', 'ЗН': 'b-zn' };
 const allLessons = () => SEMESTER_SCHEDULE.map((l, i) => ({ ...l, id: 's' + i, base: true })).concat(myLessons);
+let subSel = load('sub', '0');
+const subOk = l => subSel === '0' || !l.sub || String(l.sub) === subSel;
 const matchWeek = (l, n) => l.weeks ? l.weeks.includes(n) : l.parity === 'odd' ? n % 2 === 1 : l.parity === 'even' ? n % 2 === 0 : true;
 
 /* ---------- Тема ---------- */
@@ -49,6 +87,7 @@ function showTab(t) {
   $('#view-schedule').classList.toggle('hidden', t !== 'schedule');
   $('#view-homework').classList.toggle('hidden', t !== 'homework');
   $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  const v = $('#view-' + t); v.classList.remove('fadein'); void v.offsetWidth; v.classList.add('fadein');
 }
 $$('.tab-btn').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -65,15 +104,21 @@ $('#weekSel').onchange = e => { week = +e.target.value; renderSchedule(); };
 $('#prevWeek').onclick = () => { if (week > 1) { week--; renderSchedule(); } };
 $('#nextWeek').onclick = () => { if (week < WEEKS_COUNT) { week++; renderSchedule(); } };
 
+$('#subSel').value = subSel;
+$('#subSel').onchange = e => { subSel = e.target.value; save('sub', subSel); renderSchedule(); };
+let lastKey = '';
+
 /* ---------- Расписание ---------- */
 function renderSchedule() {
   $('#weekSel').value = week;
   $('#prevWeek').disabled = week <= 1; $('#nextWeek').disabled = week >= WEEKS_COUNT;
   const mon = addDays(semMon, (week - 1) * 7), now = new Date(), lessons = allLessons();
+  const key = week + '|' + subSel, anim = key !== lastKey; lastKey = key;
+  $('#grid').className = 'grid gap-3 md:grid-cols-2 lg:grid-cols-3' + (anim ? ' enter' : '');
   $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => {
     const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString();
-    const items = lessons.filter(l => l.day === d && matchWeek(l, week)).sort((a, b) => a.start.localeCompare(b.start));
-    return `<div class="card rounded-2xl p-3 ${isToday ? 'today' : ''}">
+    const items = lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((a, b) => a.start.localeCompare(b.start));
+    return `<div class="card rounded-2xl p-3 ${isToday ? 'today' : ''}" style="--i:${d}">
       <div class="flex items-center justify-between mb-2 px-1">
         <h3 class="font-semibold">${DAYS[d]}, <span class="sub font-normal">${fmt(date)}</span></h3>
         ${isToday ? '<span class="text-xs px-2 py-0.5 rounded-full b-lk">Сегодня</span>' : ''}
@@ -87,7 +132,7 @@ function renderSchedule() {
                 <span class="text-xs font-medium px-2 py-0.5 rounded-full ${BCLS[l.type] || 'b-pz'}">${esc(l.type)}</span>
               </div>
               <div class="font-semibold mt-1" style="color:var(--tx)">${esc(l.name)}</div>
-              <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'ауд. ' + esc(l.room) : ''}</div>
+              <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'к/ауд ' + esc(l.room) : ''}${l.sub ? ' · подгр. ' + l.sub : ''}</div>
             </${l.base ? 'div' : 'button'}>
             <button data-hw-lesson="${l.id}" class="btn2 mt-2 text-xs px-2 py-1 rounded-md">+ ДЗ</button>
           </div>`).join('') : '<p class="text-sm sub px-1 pb-1">Пар нет</p>'}
@@ -158,6 +203,7 @@ function renderHw() {
   $$('[data-toggle]').forEach(c => c.onclick = () => {
     const h = homework.find(x => x.id === c.dataset.toggle); h.done = h.done ? 0 : 1;
     save('homework', homework); renderHw();
+    const nb = $(`[data-toggle="${h.id}"]`); if (h.done && nb) nb.classList.add('pop');
   });
   $$('[data-edit-hw]').forEach(b => b.onclick = () => openHw(b.dataset.editHw));
 }
