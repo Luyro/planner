@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Расписание</title>
+<meta name="theme-color" content="#f7f7f5">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Расписание">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config = { darkMode: 'class' };</script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  dialog { border: 0; padding: 0; background: transparent; max-width: 100vw; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .safe-b { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .safe-t { padding-top: env(safe-area-inset-top, 0px); }
+</style>
+</head>
+<body class="bg-[#f7f7f5] text-neutral-900 dark:bg-[#161618] dark:text-neutral-100 min-h-screen">
+
+<header class="sticky top-0 z-20 bg-[#f7f7f5]/85 dark:bg-[#161618]/85 backdrop-blur border-b border-neutral-200 dark:border-neutral-800 safe-t">
+  <div class="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
+    <h1 class="font-semibold text-lg mr-auto">Расписание</h1>
+    <nav class="hidden md:flex gap-1 bg-neutral-200/70 dark:bg-neutral-800 rounded-lg p-1">
+      <button data-tab="schedule" class="tab-btn px-4 py-1 rounded-md text-sm">Расписание</button>
+      <button data-tab="homework" class="tab-btn px-4 py-1 rounded-md text-sm">Домашка</button>
+    </nav>
+    <button id="notifBtn" class="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700">Включить напоминания</button>
+    <button id="themeBtn" class="w-9 h-9 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800" aria-label="Сменить тему">🌓</button>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-5 pb-28 md:pb-8">
+  <section id="view-schedule">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold">Неделя</h2>
+      <button id="addLesson" class="text-sm px-3 py-1.5 rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">+ Добавить пару</button>
+    </div>
+    <div id="grid" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
+  </section>
+
+  <section id="view-homework" class="hidden">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-xl font-semibold">Домашние задания</h2>
+      <button id="addHw" class="text-sm px-3 py-1.5 rounded-lg bg-neutral-900 text-white dark:bg-white dark:text-neutral-900">+ Добавить ДЗ</button>
+    </div>
+    <div class="flex gap-2 mb-4 text-sm" id="filters">
+      <button data-f="all" class="f-btn px-3 py-1 rounded-full">Все</button>
+      <button data-f="hot" class="f-btn px-3 py-1 rounded-full">Горящие</button>
+      <button data-f="done" class="f-btn px-3 py-1 rounded-full">Выполненные</button>
+    </div>
+    <div id="hwList" class="space-y-2"></div>
+  </section>
+</main>
+
+<nav class="md:hidden fixed bottom-0 inset-x-0 z-20 bg-[#f7f7f5]/90 dark:bg-[#161618]/90 backdrop-blur border-t border-neutral-200 dark:border-neutral-800 safe-b">
+  <div class="grid grid-cols-2">
+    <button data-tab="schedule" class="tab-btn py-3 text-sm flex flex-col items-center gap-0.5"><span class="text-lg">🗓</span>Расписание</button>
+    <button data-tab="homework" class="tab-btn py-3 text-sm flex flex-col items-center gap-0.5"><span class="text-lg">✅</span>Домашка</button>
+  </div>
+</nav>
+
+<dialog id="lessonDlg">
+  <form id="lessonForm" class="bg-white dark:bg-neutral-900 rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+    <h3 id="lessonTitle" class="font-semibold text-lg">Пара</h3>
+    <input type="hidden" name="id">
+    <label class="block text-sm">День
+      <select name="day" class="fld"><option value="1">Понедельник</option><option value="2">Вторник</option><option value="3">Среда</option><option value="4">Четверг</option><option value="5">Пятница</option><option value="6">Суббота</option></select>
+    </label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block text-sm">Начало<input type="time" name="start" required class="fld"></label>
+      <label class="block text-sm">Конец<input type="time" name="end" required class="fld"></label>
+    </div>
+    <label class="block text-sm">Предмет<input name="name" required class="fld" placeholder="Например, Математика"></label>
+    <label class="block text-sm">Преподаватель<input name="teacher" class="fld"></label>
+    <label class="block text-sm">Аудитория<input name="room" class="fld"></label>
+    <label class="block text-sm">Тип занятия
+      <select name="type" required class="fld"><option value="ЛК">Лекция (ЛК)</option><option value="ПЗ">Практическое занятие (ПЗ)</option><option value="ЛР">Лабораторная работа (ЛР)</option></select>
+    </label>
+    <div class="flex gap-2 pt-2">
+      <button type="button" id="lessonDel" class="hidden px-3 py-2 rounded-lg text-red-600 text-sm mr-auto">Удалить</button>
+      <button type="button" data-close class="ml-auto px-3 py-2 rounded-lg text-sm bg-neutral-100 dark:bg-neutral-800">Отмена</button>
+      <button class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="hwDlg">
+  <form id="hwForm" class="bg-white dark:bg-neutral-900 rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+    <h3 id="hwTitle" class="font-semibold text-lg">Домашнее задание</h3>
+    <input type="hidden" name="id">
+    <label class="block text-sm">Предмет<select name="subject" required class="fld"></select></label>
+    <p id="noSubj" class="hidden text-xs text-amber-600">Сначала добавьте пары в расписание — предметы берутся оттуда.</p>
+    <label class="block text-sm">Задание<textarea name="text" required rows="3" class="fld"></textarea></label>
+    <label class="block text-sm">Срок сдачи<input type="datetime-local" name="due" required class="fld"></label>
+    <label class="block text-sm">Статус
+      <select name="done" class="fld"><option value="0">В процессе</option><option value="1">Сделано</option></select>
+    </label>
+    <div class="flex gap-2 pt-2">
+      <button type="button" id="hwDel" class="hidden px-3 py-2 rounded-lg text-red-600 text-sm mr-auto">Удалить</button>
+      <button type="button" data-close class="ml-auto px-3 py-2 rounded-lg text-sm bg-neutral-100 dark:bg-neutral-800">Отмена</button>
+      <button class="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .fld { display:block; width:100%; margin-top:4px; padding:8px 10px; border-radius:10px; border:1px solid #d4d4d8; background:transparent; font-size:15px; color:inherit; }
+  .dark .fld { border-color:#3f3f46; }
+  .dark .fld option { color:#111; }
+  .tab-btn.active { background:#fff; font-weight:600; }
+  .dark .tab-btn.active { background:#3f3f46; }
+  nav.md\:hidden .tab-btn.active { background:transparent; color:#2563eb; }
+  .f-btn { background:#e5e5e5; } .dark .f-btn { background:#27272a; }
+  .f-btn.active { background:#171717; color:#fff; } .dark .f-btn.active { background:#fff; color:#171717; }
+</style>
+
+<script src="app.js"></script>
+</body>
+</html>
