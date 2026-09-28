@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
-<meta name="app-version" content="5">
+<meta name="app-version" content="6">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f8fafc">
 <link rel="manifest" href="manifest.json">
@@ -65,13 +65,14 @@
   button:active:not(:disabled) { transform:scale(.96); }
   .card:hover { border-color:#3b82f6; }
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+  [hidden] { display:none !important; }
 </style>
 </head>
 <body>
 
 <header class="bar sticky top-0 z-20 border-b safe-t" style="background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px)">
   <div class="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
-    <h1 class="font-semibold text-lg mr-auto">Расписание</h1>
+    <select id="groupSel" class="fld mr-auto font-semibold" style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Группа"></select>
     <nav class="hidden md:flex gap-1 rounded-lg p-1 inner">
       <button data-tab="schedule" class="tab-btn px-4 py-1 rounded-md text-sm">Расписание</button>
       <button data-tab="homework" class="tab-btn px-4 py-1 rounded-md text-sm">Домашка</button>
@@ -88,6 +89,7 @@
       <select id="weekSel" class="fld" style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Неделя"></select>
       <button id="nextWeek" class="btn2 px-3 h-9 rounded-lg text-sm">Следующая →</button>
       <select id="subSel" class="fld" style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Подгруппа"><option value="0">Обе подгруппы</option><option value="1">Подгруппа 1</option><option value="2">Подгруппа 2</option></select>
+      <select id="engSel" class="fld" hidden style="width:auto;margin:0;height:36px;padding:0 10px" aria-label="Английский"><option value="0">Англ.: обе группы</option><option value="1">Англ. 1</option><option value="2">Англ. 2</option></select>
       <button id="addLesson" class="btn-inv text-sm px-3 py-1.5 rounded-lg ml-auto">+ Пара</button>
     </div>
     <div id="grid" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
@@ -115,7 +117,7 @@
 </nav>
 
 <dialog id="lessonDlg">
-  <form id="lessonForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+  <form id="lessonForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3 max-h-[90vh] overflow-y-auto">
     <h3 id="lessonTitle" class="font-semibold text-lg">Пара</h3>
     <input type="hidden" name="id">
     <label class="lbl block text-sm">День
@@ -141,7 +143,7 @@
 </dialog>
 
 <dialog id="hwDlg">
-  <form id="hwForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3">
+  <form id="hwForm" class="dlg rounded-2xl p-5 w-[92vw] max-w-md space-y-3 max-h-[90vh] overflow-y-auto">
     <h3 id="hwTitle" class="font-semibold text-lg">Домашнее задание</h3>
     <input type="hidden" name="id">
     <div class="grid grid-cols-3 gap-3">
@@ -150,7 +152,12 @@
     </div>
     <p id="noSubj" class="hidden text-xs" style="color:#fbbf24">Сначала добавьте пары в расписание — предметы берутся оттуда.</p>
     <label class="lbl block text-sm">Задание<textarea name="text" required rows="3" class="fld" placeholder="Что нужно сделать"></textarea></label>
-    <label class="lbl block text-sm">Срок сдачи<input type="datetime-local" name="due" required class="fld"></label>
+    <label class="lbl block text-sm">Срок сдачи<select id="dueSel" class="fld"></select></label>
+    <div id="dueWrap" class="hidden"><input type="datetime-local" id="dueInput" class="fld" aria-label="Дата и время сдачи"></div>
+    <label class="lbl block text-sm">Когда напомнить о задании?
+      <select id="remSel" class="fld"><option value="day8">В день сдачи (утром в 08:00)</option><option value="d1">За 1 день до сдачи</option><option value="d2">За 2 дня до сдачи</option><option value="none">Не напоминать</option><option value="custom">Указать точную дату и время…</option></select>
+    </label>
+    <div id="remWrap" class="hidden"><input type="datetime-local" id="remAt" class="fld" aria-label="Дата и время напоминания"></div>
     <label class="lbl block text-sm">Статус
       <select name="done" class="fld"><option value="0">В процессе</option><option value="1">Сделано</option></select>
     </label>

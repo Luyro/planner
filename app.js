@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '5';
+const APP_VERSION = '6';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -18,9 +18,9 @@ const SEMESTER_START = '2026-09-01'; // первый учебный день с�
 const WEEKS_COUNT = 16;
 const SLOTS = { A: ['11:15', '12:35'], B: ['13:05', '14:25'], C: ['14:35', '15:55'], D: ['16:05', '17:25'], E: ['17:45', '19:05'] };
 const TYPES = { K: 'ЛК', P: 'ПЗ', L: 'ЛР', Z: 'ЗЧ', N: 'ЗН' };
-const SUBJ = { sm: 'Стратегический маркетинг', mu: 'Маркетинг услуг', kh: 'Кураторский час', ek: 'Эконометрика', imk: 'Интегрированные маркетинговые коммуникации', mi: 'Маркетинг инноваций', fsa: 'Функционально-стоимостный анализ', mia: 'Маркетинговые исследования и аналитика', lg: 'Логистика', fk: 'Физическая культура' };
-const TEACH = { sv: 'Сверлов А.С.', sh: 'Шумских И.С.', me: 'Мельникова Л.А.', mk: 'Миксюк С.Ф.', st: 'Стасева А.А.', pu: 'Пушкин С.А.', le: 'Левчук К.А.', an: 'Анкинович Ю.Е.', tr: 'Трушкевич Н.Л.', sy: 'Синявская О.А.', pr: 'Протасеня В.С.', bu: 'Бутеня В.Е.', ko: 'Ковалева О.Л.', ar: 'Артёменко С.В.', vo: 'Волонтей А.В.', de: 'Демченко Е.В.', ve: 'Верниковская О.В.', ya: 'Яровская Е.С.', kp: 'Коптур Д.В.' };
-const RAW = [
+const SUBJ = { sm: 'Стратегический маркетинг', mu: 'Маркетинг услуг', kh: 'Кураторский час', ek: 'Эконометрика', imk: 'Интегрированные маркетинговые коммуникации', mi: 'Маркетинг инноваций', fsa: 'Функционально-стоимостный анализ', mia: 'Маркетинговые исследования и аналитика', lg: 'Логистика', fk: 'Физическая культура', dia: 'Деловой иностранный язык' };
+const TEACH = { sv: 'Сверлов А.С.', sh: 'Шумских И.С.', me: 'Мельникова Л.А.', mk: 'Миксюк С.Ф.', st: 'Стасева А.А.', pu: 'Пушкин С.А.', le: 'Левчук К.А.', an: 'Анкинович Ю.Е.', tr: 'Трушкевич Н.Л.', sy: 'Синявская О.А.', pr: 'Протасеня В.С.', bu: 'Бутеня В.Е.', ko: 'Ковалева О.Л.', ar: 'Артёменко С.В.', vo: 'Волонтей А.В.', de: 'Демченко Е.В.', ve: 'Верниковская О.В.', ya: 'Яровская Е.С.', kp: 'Коптур Д.В.', lp: 'Лапина С.Н.', kv: 'Коротышевская В.Д.', ki: 'Кирильчик Т.К.', ch: 'Черник Н.Н.' };
+const RAW_MM = [ // ===== группа 24ДММ-1 =====
   // понедельник
   [1,'A','5','sm','K','sv','1/903'], [1,'A','6','mu','P','sh','1/1201'], [1,'A','7','kh','N','me',''],
   [1,'B','2-14','ek','K','mk','1/703'], [1,'B','15','kh','N','me',''],
@@ -59,12 +59,53 @@ const RAW = [
   [6,'E','9','ek','P','st','2/320']
 ];
 const parseWeeks = s => s.split(',').flatMap(p => { const [a, b] = p.split('-').map(Number); return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a]; });
+
+/* =====================================================================
+   ГРУППА 24ДМВ-1 — СЮДА ВСТАВЛЯЙТЕ/МЕНЯЙТЕ РАСПИСАНИЕ (массив RAW_MV)
+   Строка: [день 1=Пн…6=Сб, пара A–E, недели, предмет, тип, преподаватель, к/ауд, подгруппа]
+   Подгруппа: 1 или 2 (лабораторные), 'a1' или 'a2' (английский), без неё — вся группа
+   ===================================================================== */
+const RAW_MV = [
+  // понедельник
+  [1,'A','5','sm','K','sv','1/903'], [1,'B','2-14','ek','K','mk','1/703'], [1,'C','2','ek','K','mk','1/703'], [1,'C','3','kh','N','lp',''],
+  [1,'C','4-14','lg','P','ya','1/901'], [1,'C','16','fsa','Z','sy','1/805'], [1,'D','4','mia','P','ar','1/1207'],
+  [1,'D','6-14','mia','L','ar','3/226',1], [1,'D','6-14','sm','L','vo','2/308',2], [1,'D','15','lg','Z','ve','3/233'], [1,'D','16','fsa','Z','sy','1/805'],
+  [1,'E','6','kh','N','lp',''], [1,'E','8','ek','P','st','2/215'], [1,'E','15','lg','Z','ve','3/233'],
+  // вторник
+  [2,'B','15','mu','P','sh','1/801'], [2,'B','16','mi','Z','pr','3/233'], [2,'C','1-2','fsa','K','sy','1/1203'], [2,'C','3-15','fsa','P','sy','3/441'],
+  [2,'C','16','mi','Z','pr','3/233'], [2,'D','1-14','fsa','K','sy','1/1203'], [2,'E','1-2','mi','K','pr','1/1003'],
+  [2,'E','4-9','mia','P','ar','1/1207'], [2,'E','10','fsa','P','sy','3/450'],
+  // среда
+  [3,'A','3,5,7,9','mi','K','pr','1/403'], [3,'A','4,6,8,10,12-13','imk','K','bu','1/403'], [3,'B','1,3-15','mia','K','ko','1/903'], [3,'B','2','mi','K','pr','3/136'],
+  [3,'B','16','dia','P','ki','3/429','a1'], [3,'B','16','dia','P','ch','2/322','a2'],
+  [3,'C','1-2','ek','K','mk','1/1203'], [3,'C','3-5','ek','P','st','2/322'], [3,'C','6-14','mia','L','ar','3/226',2], [3,'C','6-14','sm','L','vo','2/200',1],
+  [3,'C','15','sm','L','vo','2/200',2], [3,'C','16','dia','P','ki','1/708','a1'], [3,'C','16','dia','P','ch','2/322','a2'],
+  [3,'D','1','mi','K','pr','1/1203'], [3,'D','2','imk','K','bu','1/1203'], [3,'D','3-10','imk','P','kv','3/338'], [3,'D','11-15','imk','L','kv','2/200',2],
+  [3,'D','11-14','mi','L','an','3/138',1], [3,'D','16','sm','L','vo','2/218',1], [3,'E','2','mia','K','ko','1/1203'], [3,'E','3','fsa','K','sy','1/903'],
+  // четверг
+  [4,'A','4','ek','K','mk','1/603'], [4,'A','12-13','imk','L','kv','2/200',1], [4,'B','1-13','mu','K','de','1/903'], [4,'B','14','kh','N','lp',''],
+  [4,'B','16','dia','P','ki','2/313','a1'], [4,'B','16','dia','P','ch','2/322','a2'], [4,'C','1-2','imk','K','bu','1/1203'],
+  [4,'C','3-16','dia','P','ki','2/313','a1'], [4,'C','3-16','dia','P','ch','2/322','a2'], [4,'D','1-2','imk','K','bu','1/1203'], [4,'D','3-9','mi','P','an','1/804'],
+  [4,'D','10-11','imk','L','kv','3/226',1], [4,'D','10-13','mi','L','an','3/138',2], [4,'D','14','imk','L','kv','3/138',1],
+  [4,'D','15','dia','P','ki','2/313','a1'], [4,'D','15','dia','P','ch','2/322','a2'], [4,'E','3','sm','K','sv','1/403'],
+  // пятница
+  [5,'A','1-16','fk','P','kp',''], [5,'B','1','lg','K','ve','1/403'], [5,'B','2','sm','K','sv','1/403'], [5,'B','6-7','ek','P','st','1/805'],
+  [5,'B','8-16','ek','L','pu','2/306',1], [5,'B','8-16','ek','L','st','2/103',2], [5,'C','1-2','lg','K','ve','1/403'], [5,'C','3-16','mu','P','sh','1/801'],
+  [5,'D','3-11','lg','K','ve','1/703'], [5,'D','12','kh','N','lp',''], [5,'D','14','fsa','K','sy','1/403'], [5,'D','15','fsa','P','sy','1/804'], [5,'E','10','sm','K','sv','1/703'],
+  // суббота
+  [6,'B','1','sm','K','sv','1/403'], [6,'B','13','lg','P','ya','2/320'], [6,'C','1,3-9,11-13','sm','K','sv','1/703'],
+  [6,'D','3-9,11-13','sm','P','vo','1/701'], [6,'E','8,11','ek','P','st','1/701']
+];
 const DEMO_RAW = [ // демо-данные: показываются, только если RAW пуст или в адресе есть ?demo
   [1,'A','1-2','mu','K','sh','1/101'], [2,'B','1-2','ek','P','st','1/202'], [3,'C','1-2','sm','K','sv','1/303'],
   [4,'D','1-2','imk','L','le','2/218',1], [5,'A','1-2','lg','K','ve','1/403'], [6,'B','1-2','mi','P','an','2/320']
 ];
-const useDemo = !RAW.length || /[?&]demo/.test(location.search);
-const SEMESTER_SCHEDULE = (useDemo ? DEMO_RAW : RAW).map(([day, slot, w, s, t, te, room, sub]) => ({ day, start: SLOTS[slot][0], end: SLOTS[slot][1], weeks: parseWeeks(w), name: SUBJ[s], type: TYPES[t], teacher: TEACH[te], room, sub }));
+const useDemo = /[?&]demo/.test(location.search);
+const build = raw => raw.map(([day, slot, w, s, t, te, room, sub]) => ({ day, start: SLOTS[slot][0], end: SLOTS[slot][1], weeks: parseWeeks(w), name: SUBJ[s], type: TYPES[t], teacher: TEACH[te], room, sub }));
+const ALL_SCHEDULES = {
+  '24ДММ-1': build(useDemo || !RAW_MM.length ? DEMO_RAW : RAW_MM),
+  '24ДМВ-1': build(useDemo || !RAW_MV.length ? DEMO_RAW : RAW_MV)
+};
 
 const missing = [];
 const $ = (s, r = document) => r.querySelector(s) || (missing.push(s), document.createElement('div')); // нет элемента — безвредная заглушка, скрипт не падает
@@ -74,17 +115,24 @@ const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-let myLessons = load('lessons', []).filter(l => l.src !== 'site'); // пары, добавленные вручную
-let homework = load('homework', []);
+const DEFAULT_GROUP = '24ДММ-1';
+let group = load('group', DEFAULT_GROUP); if (!ALL_SCHEDULES[group]) group = DEFAULT_GROUP;
+const key = k => group === DEFAULT_GROUP ? k : k + ':' + group; // данные каждой группы хранятся отдельно
+let myLessons, homework; // свои пары и ДЗ текущей группы
+function loadGroupData() { myLessons = load(key('lessons'), []).filter(l => l.src !== 'site'); homework = load(key('homework'), []); }
+loadGroupData();
 let tab = load('tab', 'schedule');
 let filter = 'all';
 
 const DAYS = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 const EMPTY = '<div class="inner rounded-xl p-4 text-center text-sm sub" style="border-style:dashed">На этот день занятий нет или расписание не заполнено</div>';
 const BCLS = { 'ЛК': 'b-lk', 'ПЗ': 'b-pz', 'ЛР': 'b-lr', 'ЗЧ': 'b-zc', 'ЗН': 'b-zn' };
-const allLessons = () => SEMESTER_SCHEDULE.map((l, i) => ({ ...l, id: 's' + i, base: true })).concat(myLessons);
+const allLessons = () => ALL_SCHEDULES[group].map((l, i) => ({ ...l, id: 's' + i, base: true })).concat(myLessons);
 let subSel = load('sub', '0');
-const subOk = l => subSel === '0' || !l.sub || String(l.sub) === subSel;
+let engSel = load('eng', '0');
+const isEng = l => l.sub && String(l.sub)[0] === 'a';
+const subOk = l => !l.sub || (isEng(l) ? engSel === '0' || String(l.sub).slice(1) === engSel : subSel === '0' || String(l.sub) === subSel);
+const subLabel = s => String(s)[0] === 'a' ? 'англ. ' + String(s).slice(1) : 'подгр. ' + s;
 const matchWeek = (l, n) => l.weeks ? l.weeks.includes(n) : l.parity === 'odd' ? n % 2 === 1 : l.parity === 'even' ? n % 2 === 0 : true;
 
 /* ---------- Тема ---------- */
@@ -124,6 +172,13 @@ $('#nextWeek').onclick = () => { if (week < WEEKS_COUNT) { week++; renderSchedul
 $('#subSel').value = subSel;
 $('#subSel').onchange = e => { subSel = e.target.value; save('sub', subSel); renderSchedule(); };
 let lastKey = '';
+$('#engSel').value = engSel;
+$('#engSel').onchange = e => { engSel = e.target.value; save('eng', engSel); renderSchedule(); };
+const syncEng = () => { $('#engSel').hidden = !ALL_SCHEDULES[group].some(isEng); };
+const gs = $('#groupSel');
+gs.innerHTML = Object.keys(ALL_SCHEDULES).map(g => `<option>${g}</option>`).join(''); gs.value = group;
+gs.onchange = e => { group = e.target.value; save('group', group); loadGroupData(); lastKey = ''; syncEng(); renderSchedule(); renderHw(); };
+syncEng();
 
 /* ---------- Расписание ---------- */
 function renderSchedule() {
@@ -149,9 +204,9 @@ function renderSchedule() {
                 <span class="text-xs font-medium px-2 py-0.5 rounded-full ${BCLS[l.type] || 'b-pz'}">${esc(l.type)}</span>
               </div>
               <div class="font-semibold mt-1" style="color:var(--tx)">${esc(l.name)}</div>
-              <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'к/ауд ' + esc(l.room) : ''}${l.sub ? ' · подгр. ' + l.sub : ''}</div>
+              <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'к/ауд ' + esc(l.room) : ''}${l.sub ? ' · ' + subLabel(l.sub) : ''}</div>
             </${l.base ? 'div' : 'button'}>
-            <button data-hw-lesson="${l.id}" class="btn2 mt-2 text-xs px-2 py-1 rounded-md">+ ДЗ</button>
+            <button data-hw-lesson="${l.id}" data-date="${date.getTime()}" class="btn2 mt-2 text-xs px-2 py-1 rounded-md">+ ДЗ</button>
           </div>`).join('') : EMPTY}
       </div>
     </div>`;
@@ -159,7 +214,8 @@ function renderSchedule() {
   $$('[data-edit-lesson]').forEach(b => b.onclick = () => openLesson(b.dataset.editLesson));
   $$('[data-hw-lesson]').forEach(b => b.onclick = () => {
     const l = allLessons().find(x => x.id === b.dataset.hwLesson);
-    openHw(null, { subject: l.name, type: l.type });
+    const [hh, mm] = l.start.split(':').map(Number), from = new Date(+b.dataset.date); from.setHours(hh, mm, 0, 0);
+    openHw(null, { subject: l.name, type: l.type, from });
   });
 }
 
@@ -181,12 +237,12 @@ lessonForm.onsubmit = e => {
   const data = { id: f.id.value || uid(), day: +f.day.value, start: f.start.value, end: f.end.value, name: f.name.value.trim(), teacher: f.teacher.value.trim(), room: f.room.value.trim(), type: f.type.value, parity: f.parity.value || undefined };
   const i = myLessons.findIndex(x => x.id === data.id);
   if (i >= 0) myLessons[i] = data; else myLessons.push(data);
-  save('lessons', myLessons); lessonDlg.close(); renderSchedule();
+  save(key('lessons'), myLessons); lessonDlg.close(); renderSchedule();
 };
 $('#lessonDel').onclick = () => {
   if (!confirm('Удалить эту пару?')) return;
   myLessons = myLessons.filter(x => x.id !== lessonForm.id.value);
-  save('lessons', myLessons); lessonDlg.close(); renderSchedule();
+  save(key('lessons'), myLessons); lessonDlg.close(); renderSchedule();
 };
 
 /* ---------- Домашка ---------- */
@@ -213,13 +269,13 @@ function renderHw() {
       <button data-edit-hw="${h.id}" class="flex-1 text-left min-w-0">
         <div class="flex items-center gap-2"><span class="font-semibold ${h.done ? 'line-through' : ''}">${esc(h.subject)}</span>${h.type ? `<span class="text-xs px-2 py-0.5 rounded-full ${BCLS[h.type]}">${h.type}</span>` : ''}</div>
         <div class="text-sm whitespace-pre-line break-words ${h.done ? 'line-through' : ''}" style="color:var(--tx)">${esc(h.text)}</div>
-        <div class="text-xs mt-1 sub">до ${due} · <span style="${h.done ? '' : 'color:' + t.color}">${h.done ? 'сделано' : t.text}</span></div>
+        <div class="text-xs mt-1 sub">до ${due} · <span style="${h.done ? '' : 'color:' + t.color}">${h.done ? 'сделано' : t.text}</span>${h.done ? '' : ' · ' + remLabel(h)}</div>
       </button>
     </div>`;
   }).join('') : '<p class="text-sm sub py-8 text-center">Здесь пока пусто</p>';
   $$('[data-toggle]').forEach(c => c.onclick = () => {
     const h = homework.find(x => x.id === c.dataset.toggle); h.done = h.done ? 0 : 1;
-    save('homework', homework); renderHw();
+    save(key('homework'), homework); renderHw();
     const nb = $(`[data-toggle="${h.id}"]`); if (h.done && nb) nb.classList.add('pop');
   });
   $$('[data-edit-hw]').forEach(b => b.onclick = () => openHw(b.dataset.editHw));
@@ -227,6 +283,37 @@ function renderHw() {
 $$('.f-btn').forEach(b => b.onclick = () => { filter = b.dataset.f; renderHw(); });
 
 const hwDlg = $('#hwDlg'), hwForm = $('#hwForm');
+const pad = n => String(n).padStart(2, '0');
+const toLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtFull = d => d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }) + ', ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+let hwFrom = new Date(), hwKeep = '';
+
+// Ближайшие занятия вперёд по семестру с тем же предметом и тем же типом (ЛК/ПЗ/ЛР)
+function nextLessons(subject, type, from, count = 2) {
+  const out = [], seen = new Set(), list = allLessons().filter(l => l.name === subject && (!type || l.type === type) && subOk(l));
+  for (let w = 1; w <= WEEKS_COUNT; w++) list.forEach(l => {
+    if (!matchWeek(l, w)) return;
+    const [hh, mm] = l.start.split(':').map(Number), d = addDays(semMon, (w - 1) * 7 + l.day - 1);
+    d.setHours(hh, mm, 0, 0);
+    if (d > from && !seen.has(+d)) { seen.add(+d); out.push(d); }
+  });
+  return out.sort((x, y) => x - y).slice(0, count);
+}
+function toggleDue() { const m = $('#dueSel').value === 'manual'; $('#dueWrap').classList.toggle('hidden', !m); $('#dueInput').required = m; }
+function toggleRem() { const m = $('#remSel').value === 'custom'; $('#remWrap').classList.toggle('hidden', !m); $('#remAt').required = m; }
+function refreshDue() {
+  const opts = [];
+  if (hwKeep) opts.push([hwKeep, 'Текущий срок: ' + fmtFull(new Date(hwKeep))]);
+  nextLessons(hwForm.subject.value, hwForm.type.value, hwFrom).forEach((d, i) =>
+    opts.push([toLocal(d), (i ? 'Следующее занятие: ' : 'Ближайшее занятие: ') + fmtFull(d)]));
+  opts.push(['manual', 'Выбрать свою дату и время вручную']);
+  $('#dueSel').innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
+  toggleDue();
+}
+hwForm.subject.onchange = hwForm.type.onchange = refreshDue;
+$('#dueSel').onchange = toggleDue;
+$('#remSel').onchange = toggleRem;
+
 function openHw(id, preset) {
   const h = homework.find(x => x.id === id);
   hwForm.reset();
@@ -238,27 +325,52 @@ function openHw(id, preset) {
   hwForm.id.value = h ? h.id : '';
   $('#hwTitle').textContent = h ? 'Редактировать ДЗ' : 'Новое ДЗ';
   $('#hwDel').classList.toggle('hidden', !h);
-  if (h) { hwForm.subject.value = h.subject; hwForm.type.value = h.type || ''; hwForm.text.value = h.text; hwForm.due.value = h.due; hwForm.done.value = h.done; }
+  $('#remSel').value = h ? (h.rem || 'd1') : 'd1';
+  $('#remAt').value = h && h.remAt || '';
+  if (h) { hwForm.subject.value = h.subject; hwForm.type.value = h.type || ''; hwForm.text.value = h.text; hwForm.done.value = h.done; }
   else if (preset) { hwForm.subject.value = preset.subject; hwForm.type.value = preset.type; }
-  hwDlg.showModal();
+  const now = new Date();
+  hwFrom = preset && preset.from > now ? preset.from : now;
+  hwKeep = h ? h.due : '';
+  refreshDue();
+  $('#dueInput').value = h ? h.due : '';
+  toggleRem(); hwDlg.showModal();
 }
 $('#addHw').onclick = () => openHw();
 hwForm.onsubmit = e => {
   e.preventDefault();
   const f = hwForm;
   if (!f.subject.value) return alert('Сначала добавьте пары в расписание.');
+  const due = $('#dueSel').value === 'manual' ? $('#dueInput').value : $('#dueSel').value;
+  if (!due) return alert('Укажите срок сдачи.');
+  const rem = $('#remSel').value, remAt = rem === 'custom' ? $('#remAt').value : '';
+  if (rem === 'custom' && !remAt) return alert('Укажите дату и время напоминания.');
   const old = homework.find(x => x.id === f.id.value);
-  const data = { id: f.id.value || uid(), subject: f.subject.value, type: f.type.value, text: f.text.value.trim(), due: f.due.value, done: +f.done.value, n: old && old.due === f.due.value ? old.n : {} };
+  const same = old && old.due === due && (old.rem || 'd1') === rem && (old.remAt || '') === remAt;
+  const data = { id: f.id.value || uid(), subject: f.subject.value, type: f.type.value, text: f.text.value.trim(), due, done: +f.done.value, rem, remAt, n: same ? old.n : {} };
   const i = homework.findIndex(x => x.id === data.id);
   if (i >= 0) homework[i] = data; else homework.push(data);
-  save('homework', homework); hwDlg.close(); renderHw(); checkReminders();
+  save(key('homework'), homework); hwDlg.close(); renderHw(); checkReminders();
 };
 $('#hwDel').onclick = () => {
   if (!confirm('Удалить это задание?')) return;
   homework = homework.filter(x => x.id !== hwForm.id.value);
-  save('homework', homework); hwDlg.close(); renderHw();
+  save(key('homework'), homework); hwDlg.close(); renderHw();
 };
 $$('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+
+// Время напоминания: по выбранному режиму, а не только по дедлайну
+function remindAt(h) {
+  const due = new Date(h.due), m = h.rem || 'd1';
+  if (m === 'none') return null;
+  if (m === 'custom') return h.remAt ? new Date(h.remAt) : null;
+  if (m === 'day8') { const d = new Date(due); d.setHours(8, 0, 0, 0); return d; }
+  return new Date(due - (m === 'd2' ? 2 : 1) * 864e5);
+}
+function remLabel(h) {
+  const r = remindAt(h);
+  return r ? '🔔 ' + r.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '🔕 без напоминания';
+}
 
 /* ---------- Уведомления ---------- */
 function updateNotifBtn() {
@@ -283,15 +395,16 @@ async function notify(title, body) {
 }
 function checkReminders() {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  let changed = false;
+  const now = Date.now(); let changed = false;
   homework.forEach(h => {
-    if (h.done) return;
+    const rt = remindAt(h);
+    if (h.done || !rt) return; // «Не напоминать» — уведомлений нет вообще
     h.n = h.n || {};
-    const ms = new Date(h.due) - Date.now();
-    if (ms <= 864e5 && ms > 0 && !h.n.day) { h.n.day = 1; changed = true; notify('Дедлайн через 24 часа', `${h.subject}: ${h.text}`); }
-    if (ms <= 0 && ms > -36e5 && !h.n.due) { h.n.due = 1; changed = true; notify('Срок сдачи наступил', `${h.subject}: ${h.text}`); }
+    const due = new Date(h.due).getTime();
+    if (now >= rt.getTime() && now < due && !h.n.rem) { h.n.rem = 1; changed = true; notify('Напоминание о ДЗ', `${h.subject}: ${h.text} — ${timeLeft(h.due).text}`); }
+    if (now >= due && now < due + 36e5 && !h.n.due) { h.n.due = 1; changed = true; notify('Срок сдачи наступил', `${h.subject}: ${h.text}`); }
   });
-  if (changed) save('homework', homework);
+  if (changed) save(key('homework'), homework);
 }
 
 /* ---------- Запуск ---------- */
