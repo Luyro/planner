@@ -1,4 +1,14 @@
 'use strict';
+const APP_VERSION = '5';
+function banner(msg) {
+  const d = document.createElement('div');
+  d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
+  d.textContent = msg;
+  (document.querySelector('main') || document.body).prepend(d);
+}
+window.addEventListener('error', e => banner('Ошибка скрипта: ' + e.message));
+
+function boot() {
 /* =====================================================================
    РАСПИСАНИЕ НА СЕМЕСТР (из таблицы группы)
    Строка RAW: [день 1=Пн…6=Сб, пара A–E, недели, предмет, тип, преподаватель, к/ауд, подгруппа]
@@ -49,9 +59,15 @@ const RAW = [
   [6,'E','9','ek','P','st','2/320']
 ];
 const parseWeeks = s => s.split(',').flatMap(p => { const [a, b] = p.split('-').map(Number); return b ? Array.from({ length: b - a + 1 }, (_, i) => a + i) : [a]; });
-const SEMESTER_SCHEDULE = RAW.map(([day, slot, w, s, t, te, room, sub]) => ({ day, start: SLOTS[slot][0], end: SLOTS[slot][1], weeks: parseWeeks(w), name: SUBJ[s], type: TYPES[t], teacher: TEACH[te], room, sub }));
+const DEMO_RAW = [ // демо-данные: показываются, только если RAW пуст или в адресе есть ?demo
+  [1,'A','1-2','mu','K','sh','1/101'], [2,'B','1-2','ek','P','st','1/202'], [3,'C','1-2','sm','K','sv','1/303'],
+  [4,'D','1-2','imk','L','le','2/218',1], [5,'A','1-2','lg','K','ve','1/403'], [6,'B','1-2','mi','P','an','2/320']
+];
+const useDemo = !RAW.length || /[?&]demo/.test(location.search);
+const SEMESTER_SCHEDULE = (useDemo ? DEMO_RAW : RAW).map(([day, slot, w, s, t, te, room, sub]) => ({ day, start: SLOTS[slot][0], end: SLOTS[slot][1], weeks: parseWeeks(w), name: SUBJ[s], type: TYPES[t], teacher: TEACH[te], room, sub }));
 
-const $ = (s, r = document) => r.querySelector(s);
+const missing = [];
+const $ = (s, r = document) => r.querySelector(s) || (missing.push(s), document.createElement('div')); // нет элемента — безвредная заглушка, скрипт не падает
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -64,6 +80,7 @@ let tab = load('tab', 'schedule');
 let filter = 'all';
 
 const DAYS = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+const EMPTY = '<div class="inner rounded-xl p-4 text-center text-sm sub" style="border-style:dashed">На этот день занятий нет или расписание не заполнено</div>';
 const BCLS = { 'ЛК': 'b-lk', 'ПЗ': 'b-pz', 'ЛР': 'b-lr', 'ЗЧ': 'b-zc', 'ЗН': 'b-zn' };
 const allLessons = () => SEMESTER_SCHEDULE.map((l, i) => ({ ...l, id: 's' + i, base: true })).concat(myLessons);
 let subSel = load('sub', '0');
@@ -97,7 +114,7 @@ const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); r
 const fmt = d => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 const semMon = mondayOf(new Date(SEMESTER_START));
 const currentWeek = Math.min(WEEKS_COUNT, Math.max(1, Math.floor((mondayOf(new Date()) - semMon) / 6048e5) + 1));
-let week = currentWeek;
+let week = Number.isFinite(currentWeek) ? currentWeek : 1;
 
 $('#weekSel').innerHTML = Array.from({ length: WEEKS_COUNT }, (_, i) => `<option value="${i + 1}">Неделя ${i + 1}${i + 1 === currentWeek ? ' (текущая)' : ''}</option>`).join('');
 $('#weekSel').onchange = e => { week = +e.target.value; renderSchedule(); };
@@ -115,7 +132,7 @@ function renderSchedule() {
   const mon = addDays(semMon, (week - 1) * 7), now = new Date(), lessons = allLessons();
   const key = week + '|' + subSel, anim = key !== lastKey; lastKey = key;
   $('#grid').className = 'grid gap-3 md:grid-cols-2 lg:grid-cols-3' + (anim ? ' enter' : '');
-  $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => {
+  $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { try {
     const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString();
     const items = lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((a, b) => a.start.localeCompare(b.start));
     return `<div class="card rounded-2xl p-3 ${isToday ? 'today' : ''}" style="--i:${d}">
@@ -135,10 +152,10 @@ function renderSchedule() {
               <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'к/ауд ' + esc(l.room) : ''}${l.sub ? ' · подгр. ' + l.sub : ''}</div>
             </${l.base ? 'div' : 'button'}>
             <button data-hw-lesson="${l.id}" class="btn2 mt-2 text-xs px-2 py-1 rounded-md">+ ДЗ</button>
-          </div>`).join('') : '<p class="text-sm sub px-1 pb-1">Пар нет</p>'}
+          </div>`).join('') : EMPTY}
       </div>
     </div>`;
-  }).join('');
+  } catch (err) { console.error(err); return `<div class="card rounded-2xl p-3"><h3 class="font-semibold mb-2">${DAYS[d]}</h3>${EMPTY}</div>`; } }).join('');
   $$('[data-edit-lesson]').forEach(b => b.onclick = () => openLesson(b.dataset.editLesson));
   $$('[data-hw-lesson]').forEach(b => b.onclick = () => {
     const l = allLessons().find(x => x.id === b.dataset.hwLesson);
@@ -278,7 +295,13 @@ function checkReminders() {
 }
 
 /* ---------- Запуск ---------- */
-applyTheme(); updateNotifBtn(); showTab(tab); renderSchedule(); renderHw(); checkReminders();
+[applyTheme, updateNotifBtn, () => showTab(tab), renderSchedule, renderHw, checkReminders].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
+const mv = document.querySelector('meta[name=app-version]');
+if (!mv || mv.content !== APP_VERSION) banner('index.html и app.js от разных версий: загрузите оба файла на GitHub и обновите страницу (Ctrl+F5).');
+else if (missing.length) banner('В index.html не найдены элементы: ' + [...new Set(missing)].join(', '));
 setInterval(() => { renderHw(); checkReminders(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderSchedule(); renderHw(); checkReminders(); } });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error);
+
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
