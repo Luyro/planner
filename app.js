@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -190,14 +190,14 @@ function renderSchedule() {
   $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { try {
     const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString();
     const items = lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((a, b) => a.start.localeCompare(b.start));
-    return `<div class="card rounded-2xl p-3 ${isToday ? 'today' : ''}" style="--i:${d}">
+    return `<div class="card rounded-md shadow-xs p-3 ${isToday ? 'today' : ''}" style="--i:${d}">
       <div class="flex items-center justify-between mb-2 px-1">
         <h3 class="font-semibold">${DAYS[d]}, <span class="sub font-normal">${fmt(date)}</span></h3>
         ${isToday ? '<span class="text-xs px-2 py-0.5 rounded-full b-lk">Сегодня</span>' : ''}
       </div>
       <div class="space-y-2">
         ${items.length ? items.map(l => `
-          <div class="inner rounded-xl p-3">
+          <div class="inner rounded-md p-3">
             <${l.base ? 'div' : 'button data-edit-lesson="' + l.id + '"'} class="block w-full text-left">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs sub">${esc(l.start)}–${esc(l.end)}</span>
@@ -210,7 +210,7 @@ function renderSchedule() {
           </div>`).join('') : EMPTY}
       </div>
     </div>`;
-  } catch (err) { console.error(err); return `<div class="card rounded-2xl p-3"><h3 class="font-semibold mb-2">${DAYS[d]}</h3>${EMPTY}</div>`; } }).join('');
+  } catch (err) { console.error(err); return `<div class="card rounded-md shadow-xs p-3"><h3 class="font-semibold mb-2">${DAYS[d]}</h3>${EMPTY}</div>`; } }).join('');
   $$('[data-edit-lesson]').forEach(b => b.onclick = () => openLesson(b.dataset.editLesson));
   $$('[data-hw-lesson]').forEach(b => b.onclick = () => {
     const l = allLessons().find(x => x.id === b.dataset.hwLesson);
@@ -256,29 +256,88 @@ function timeLeft(due) {
 const isHot = h => !h.done && new Date(h.due) - Date.now() < 2 * 864e5;
 const CHECK = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+let dragId = null, suppressClick = false;
+const CHECK_S = CHECK.replace('w-4 h-4', 'w-3 h-3');
+const GRIP = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+function urgency(h) {
+  if (h.done) return ['kb-gray', 'Сделано'];
+  const ms = new Date(h.due) - Date.now();
+  return ms < 0 ? ['kb-red', 'Просрочено'] : ms < 1728e5 ? ['kb-amber', 'Горит'] : ['kb-blue', 'В срок'];
+}
+// Канбан-доска: две колонки, карточки перетаскиваются между ними (меняется статус)
 function renderHw() {
+  if (dragId) return;
   $$('.f-btn').forEach(b => b.classList.toggle('active', b.dataset.f === filter));
-  const list = homework
-    .filter(h => filter === 'all' || (filter === 'hot' && isHot(h)) || (filter === 'done' && h.done))
-    .sort((a, b) => (a.done - b.done) || (new Date(a.due) - new Date(b.due)));
-  $('#hwList').innerHTML = list.length ? list.map(h => {
-    const t = timeLeft(h.due);
-    const due = new Date(h.due).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
-    return `<div class="card flex gap-3 items-start rounded-2xl p-3 transition-opacity" style="${h.done ? 'opacity:.55' : ''}">
-      <button data-toggle="${h.id}" role="checkbox" aria-checked="${!!h.done}" aria-label="Сделано" class="chk ${h.done ? 'on' : ''} mt-0.5 w-6 h-6 shrink-0 rounded-full grid place-items-center">${h.done ? CHECK : ''}</button>
-      <button data-edit-hw="${h.id}" class="flex-1 text-left min-w-0">
-        <div class="flex items-center gap-2"><span class="font-semibold ${h.done ? 'line-through' : ''}">${esc(h.subject)}</span>${h.type ? `<span class="text-xs px-2 py-0.5 rounded-full ${BCLS[h.type]}">${h.type}</span>` : ''}</div>
-        <div class="text-sm whitespace-pre-line break-words ${h.done ? 'line-through' : ''}" style="color:var(--tx)">${esc(h.text)}</div>
-        <div class="text-xs mt-1 sub">до ${due} · <span style="${h.done ? '' : 'color:' + t.color}">${h.done ? 'сделано' : t.text}</span>${h.done ? '' : ' · ' + remLabel(h)}</div>
-      </button>
+  const vis = homework.filter(h => filter === 'all' || (filter === 'hot' && isHot(h)) || (filter === 'done' && h.done));
+  const byDue = (x, y) => new Date(x.due) - new Date(y.due);
+  const cardHtml = h => {
+    const t = timeLeft(h.due), [uc, ut] = urgency(h);
+    const due = new Date(h.due).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `<div class="kcard inner rounded-md shadow-xs" data-id="${h.id}" tabindex="0" style="${h.done ? 'opacity:.55' : ''}">
+      <div class="flex flex-col gap-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <button data-toggle="${h.id}" role="checkbox" aria-checked="${!!h.done}" aria-label="Сделано" class="chk ${h.done ? 'on' : ''} w-5 h-5 shrink-0 rounded-full grid place-items-center">${h.done ? CHECK_S : ''}</button>
+            <span class="clamp1 font-medium text-sm ${h.done ? 'line-through' : ''}">${esc(h.subject)}</span>
+          </div>
+          <span class="kb ${uc} shrink-0">${ut}</span>
+        </div>
+        <div class="clamp2 text-sm break-words ${h.done ? 'line-through' : ''}" style="color:var(--tx)">${esc(h.text)}</div>
+        <div class="text-xs sub tabular-nums">до ${due}${h.done ? '' : ` · <span style="color:${t.color}">${t.text}</span>`}</div>
+        <div class="flex items-center justify-between gap-2 text-xs sub">
+          <div class="flex items-center gap-1.5 flex-wrap min-w-0">${h.type ? `<span class="kb-type ${BCLS[h.type]}">${h.type}</span>` : ''}${h.done ? '' : `<span>${remLabel(h)}</span>`}</div>
+          <span class="kgrip" title="Перетащить" aria-hidden="true">${GRIP}</span>
+        </div>
+      </div>
     </div>`;
-  }).join('') : '<p class="text-sm sub py-8 text-center">Здесь пока пусто</p>';
-  $$('[data-toggle]').forEach(c => c.onclick = () => {
+  };
+  const colHtml = (id, title, items, hint) => `<div class="kcol card shadow-xs" data-col="${id}">
+      <div class="flex items-center gap-2.5 mb-2.5"><span class="font-semibold text-sm">${title}</span><span class="kb-count">${items.length}</span></div>
+      <div class="kdrop">${items.length ? items.map(cardHtml).join('') : `<div class="kempty">${hint}</div>`}</div>
+    </div>`;
+  $('#hwList').innerHTML =
+    colHtml('todo', 'В процессе', vis.filter(h => !h.done).sort(byDue), 'Нет задач в работе') +
+    colHtml('done', 'Сделано', vis.filter(h => h.done).sort(byDue), 'Перетащите сюда выполненное');
+  $$('[data-toggle]').forEach(c => c.onclick = e => {
+    e.stopPropagation();
     const h = homework.find(x => x.id === c.dataset.toggle); h.done = h.done ? 0 : 1;
     save(key('homework'), homework); renderHw();
-    const nb = $(`[data-toggle="${h.id}"]`); if (h.done && nb) nb.classList.add('pop');
   });
-  $$('[data-edit-hw]').forEach(b => b.onclick = () => openHw(b.dataset.editHw));
+  $$('.kcard').forEach(bindCard);
+}
+function bindCard(card) {
+  const id = card.dataset.id;
+  card.onclick = e => { if (suppressClick || e.target.closest('[data-toggle]')) return; openHw(id); };
+  card.onkeydown = e => { if (e.key === 'Enter' && e.target === card) openHw(id); };
+  card.onpointerdown = e => {
+    if (e.button > 0 || e.target.closest('[data-toggle]')) return;
+    if (e.pointerType !== 'mouse' && !e.target.closest('.kgrip')) return; // на телефоне тянем за ручку ⋮⋮, чтобы не мешать прокрутке
+    const sx = e.clientX, sy = e.clientY;
+    let ghost = null, over = null;
+    const move = ev => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 10) return;
+        const r = card.getBoundingClientRect();
+        ghost = card.cloneNode(true); ghost.classList.add('kghost');
+        ghost.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;pointer-events:none;z-index:60;opacity:.95`;
+        document.body.appendChild(ghost); card.style.opacity = '.4'; dragId = id;
+      }
+      ghost.style.transform = `translate(${ev.clientX - sx}px,${ev.clientY - sy}px) rotate(1.5deg)`;
+      const col = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-col]');
+      if (col !== over) { over?.classList.remove('drop'); over = col; over?.classList.add('drop'); }
+    };
+    const end = (ev, cancelled) => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', cancel);
+      if (!ghost) return; // это обычный клик
+      ghost.remove(); over?.classList.remove('drop'); dragId = null;
+      suppressClick = true; setTimeout(() => { suppressClick = false; }, 50);
+      const h = homework.find(x => x.id === id), done = over && over.dataset.col === 'done' ? 1 : 0;
+      if (!cancelled && over && h.done !== done) { h.done = done; save(key('homework'), homework); }
+      renderHw();
+    };
+    const up = ev => end(ev, false), cancel = ev => end(ev, true);
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', cancel);
+  };
 }
 $$('.f-btn').forEach(b => b.onclick = () => { filter = b.dataset.f; renderHw(); });
 

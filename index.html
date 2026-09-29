@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
-<meta name="app-version" content="6">
+<meta name="app-version" content="7">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f8fafc">
 <link rel="manifest" href="manifest.json">
@@ -66,6 +66,27 @@
   .card:hover { border-color:#3b82f6; }
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
   [hidden] { display:none !important; }
+
+  /* Канбан-доска домашки (адаптация дизайна: колонки-карточки, outline-бейджи, ручка перетаскивания) */
+  #hwList { display:grid; gap:20px; grid-template-columns:minmax(0,1fr); align-items:start; }
+  @media (min-width:768px) { #hwList { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .shadow-xs, .card, .inner { box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .kcol { padding:10px; border-radius:6px; transition:border-color .2s, box-shadow .2s; }
+  .kcol.drop { border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.28); }
+  .kdrop { display:flex; flex-direction:column; gap:10px; padding:2px; min-height:56px; }
+  .kcard { padding:12px; cursor:grab; -webkit-user-select:none; user-select:none; }
+  .kcard:focus-visible { outline:2px solid #3b82f6; outline-offset:1px; }
+  .kgrip { touch-action:none; cursor:grab; color:var(--sub); padding:4px; margin:-4px; line-height:0; border-radius:6px; }
+  .kghost { cursor:grabbing !important; box-shadow:0 14px 30px rgba(0,0,0,.4) !important; }
+  .kempty { border:1px dashed var(--bd); border-radius:6px; padding:16px; text-align:center; font-size:12px; color:var(--sub); }
+  .clamp1, .clamp2 { display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; } .clamp1 { -webkit-line-clamp:1; } .clamp2 { -webkit-line-clamp:2; }
+  .kb { display:inline-flex; align-items:center; height:20px; padding:0 6px; border-radius:4px; font-size:11px; font-weight:500; border:1px solid; white-space:nowrap; }
+  .kb-red { color:#b91c1c; background:#fef2f2; border-color:#fecaca; } .dark .kb-red { color:#fca5a5; background:#450a0a; border-color:#7f1d1d; }
+  .kb-amber { color:#a16207; background:#fefce8; border-color:#fde68a; } .dark .kb-amber { color:#fcd34d; background:#422006; border-color:#713f12; }
+  .kb-blue { color:#1d4ed8; background:#eff6ff; border-color:#bfdbfe; } .dark .kb-blue { color:#93c5fd; background:#172554; border-color:#1e3a8a; }
+  .kb-gray { color:var(--sub); background:transparent; border-color:var(--bd); }
+  .kb-count { display:inline-flex; align-items:center; justify-content:center; height:24px; min-width:24px; padding:0 6px; border-radius:6px; font-size:12px; background:var(--btn); color:var(--tx); }
+  .kb-type { display:inline-flex; align-items:center; height:20px; padding:0 6px; border-radius:4px; font-size:11px; font-weight:500; }
 </style>
 </head>
 <body>
@@ -105,7 +126,7 @@
       <button data-f="hot" class="f-btn px-3 py-1 rounded-full">Горящие</button>
       <button data-f="done" class="f-btn px-3 py-1 rounded-full">Выполненные</button>
     </div>
-    <div id="hwList" class="space-y-2"></div>
+    <div id="hwList"></div>
   </section>
 </main>
 
