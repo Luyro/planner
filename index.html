@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
-<meta name="app-version" content="9">
+<meta name="app-version" content="10">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#3e4593">
 <link rel="manifest" href="manifest.json">
@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Расписание">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -24,7 +25,12 @@
   .dark { --bg:#0f1547; --hero:#3e4593; --card:#1c2569; --inner:#141b57; --bd:#3b4590; --tx:#ffffff; --head:#ffffff; --light:#b3bbff; --sub:#d0d5ff; --btn:#2c3688; --fld:#141b57; --fldbd:#5a66c2; --ph:#a3abf0; --green:#0f766e; --ring:#34d399; color-scheme:dark; }
   *, *::before, *::after { box-sizing:border-box; }
   * { -webkit-tap-highlight-color:transparent; }
-  body { font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--tx); min-height:100vh; }
+  a, button, select, input, label { -webkit-tap-highlight-color:rgba(0,0,0,0); }
+  @media (max-width:767px) { select.fld, input.fld, textarea.fld { font-size:16px; } } /* iOS не приближает страницу при фокусе в поле */
+  .mainpad { padding-bottom:calc(9.5rem + env(safe-area-inset-bottom,0px)); } @media (min-width:768px) { .mainpad { padding-bottom:40px; } }
+  .wrap { width:100%; max-width:1600px; margin-left:auto; margin-right:auto; }
+  html { -webkit-text-size-adjust:100%; overscroll-behavior-x:none; }
+  body { overscroll-behavior-x:none; -webkit-touch-callout:none; font-family:'Montserrat',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--tx); min-height:100vh; min-height:100dvh; }
   button { background:transparent; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
   select, input, textarea { font-family:inherit; }
   [hidden], .hidden { display:none !important; }
@@ -78,8 +84,11 @@
   .dchip i { width:5px; height:5px; border-radius:9999px; background:var(--pink); } .dchip i.off { background:transparent; }
   .dchip.sel { background:var(--green); color:var(--ongreen); } .dchip.sel .dn { color:var(--ongreen); }
   .dchip.tod .dd { text-decoration:underline; text-underline-offset:3px; }
+  #grid { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; max-width:640px; margin:0 auto; min-height:55dvh; touch-action:pan-y; }
   .daycol { display:none; padding:16px; } .daycol.sel { display:block; }
-  @media (min-width:768px) { .daycol { display:block; } }
+  @keyframes slideL { from { opacity:0; transform:translateX(36px); } to { opacity:1; transform:none; } }
+  @keyframes slideR { from { opacity:0; transform:translateX(-36px); } to { opacity:1; transform:none; } }
+  .daycol.slide-l { animation:slideL .28s cubic-bezier(.2,.8,.2,1) both; } .daycol.slide-r { animation:slideR .28s cubic-bezier(.2,.8,.2,1) both; }
   .daycol.today { border-color:var(--ring); box-shadow:0 0 0 3px rgba(52,211,153,.3); }
   .dayhead { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; }
   .dayhead h3 { font-weight:900; font-size:15px; color:var(--head); }
@@ -151,13 +160,28 @@
   .chk.pop { animation:pop .3s ease; }
   button { transition:transform .15s, filter .15s, background-color .2s; } button:active:not(:disabled) { transform:scale(.96); }
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+  /* Десктоп ≥1024px: вся неделя — 6 колонок в ряд (правила стоят после базовых, чтобы их переопределять) */
+  @media (min-width:1024px) {
+    .dstrip { display:none; }
+    #grid { grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; max-width:none; min-height:0; align-items:start; }
+    .daycol { display:block; padding:10px; border-radius:22px; min-width:0; }
+    .dayhead { flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:4px; min-height:58px; margin-bottom:10px; }
+    .dayhead h3 { font-size:12px; line-height:1.15; } .dayhead h3 span { display:block; margin-top:2px; }
+    .lesson { flex-direction:column; gap:6px; padding:9px; border-radius:16px; }
+    .vdiv { display:none; }
+    .tcol { flex-direction:row; align-items:baseline; gap:4px; min-width:0; } .tcol b { font-size:13px; } .tcol span { font-size:11px; } .tcol span::before { content:'– '; }
+    .lrow { flex-direction:column-reverse; align-items:flex-start; gap:6px; }
+    .lname { font-size:12px; overflow-wrap:break-word; } .lmeta { font-size:11px; overflow-wrap:break-word; }
+    .hwbtn { margin-top:6px; min-height:28px; padding:0 12px; }
+  }
+  @media (min-width:1280px) { #grid { gap:12px; } .daycol { padding:12px; } .dayhead h3 { font-size:13px; } .lesson { padding:10px; } .lname { font-size:13px; } }
 </style>
 </head>
 <body>
 
 <header class="hero safe-t">
   <span class="blob g"></span><span class="blob p"></span>
-  <div class="relative max-w-7xl mx-auto px-4 pt-4 pb-7 md:pb-9">
+  <div class="relative wrap mx-auto px-4 pt-4 pb-7 md:pb-9">
     <div class="flex items-center gap-2">
       <select id="groupSel" class="pill-sel" aria-label="Группа"></select>
       <nav class="htabs ml-auto mr-2">
@@ -175,7 +199,7 @@
   </div>
 </header>
 
-<div id="notifBanner" hidden class="max-w-7xl mx-auto px-4 pt-4">
+<div id="notifBanner" hidden class="wrap mx-auto px-4 pt-4">
   <div class="card flex items-center gap-3 flex-wrap" style="padding:14px 16px;border-radius:24px">
     <span aria-hidden="true">🔔</span>
     <p id="notifMsg" class="flex-1 text-sm font-semibold" style="min-width:200px"></p>
@@ -184,7 +208,7 @@
   </div>
 </div>
 
-<main class="max-w-7xl mx-auto px-4 pt-6 pb-36 md:pb-10">
+<main class="wrap mx-auto px-4 pt-6 mainpad">
   <section id="view-schedule">
     <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
       <div>
@@ -200,8 +224,8 @@
       <select id="subSel" class="fld" style="width:auto;margin:0;min-height:40px;padding:0 14px;border-radius:9999px" aria-label="Подгруппа"><option value="0">Обе подгруппы</option><option value="1">Подгруппа 1</option><option value="2">Подгруппа 2</option></select>
       <select id="engSel" class="fld" hidden style="width:auto;margin:0;min-height:40px;padding:0 14px;border-radius:9999px" aria-label="Английский"><option value="0">Англ.: обе группы</option><option value="1">Англ. 1</option><option value="2">Англ. 2</option></select>
     </div>
-    <div id="dayStrip" class="dstrip md:hidden mb-4"></div>
-    <div id="grid" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"></div>
+    <div id="dayStrip" class="dstrip mb-4"></div>
+    <div id="grid"></div>
   </section>
 
   <section id="view-homework" class="hidden">

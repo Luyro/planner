@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '9';
+const APP_VERSION = '10';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -18,7 +18,7 @@ const SEMESTER_START = '2026-09-01'; // первый учебный день с�
 const WEEKS_COUNT = 16;
 const SLOTS = { A: ['11:15', '12:35'], B: ['13:05', '14:25'], C: ['14:35', '15:55'], D: ['16:05', '17:25'], E: ['17:45', '19:05'] };
 // Расписание звонков БГЭУ (можно править здесь): [название, начало, конец]
-const BELLS = [['1 пара', '08:30', '09:50'], ['2 пара', '10:05', '11:25'], ['3 пара', '11:40', '13:00'], ['4 пара', '13:30', '14:50'], ['5 пара', '15:05', '16:25'], ['6 пара', '16:35', '17:55'], ['7 пара', '18:05', '19:25']];
+const BELLS = [['1 пара', '08:15', '09:35'], ['2 пара', '09:45', '11:05'], ['3 пара', '11:15', '12:35'], ['4 пара', '13:05', '14:25'], ['5 пара', '14:35', '15:55'], ['6 пара', '16:05', '17:25'], ['7 пара', '17:45', '19:05'], ['8 пара', '19:15', '20:35']];
 const TYPES = { K: 'ЛК', P: 'ПЗ', L: 'ЛР', Z: 'ЗЧ', N: 'ЗН' };
 const SUBJ = { sm: 'Стратегический маркетинг', mu: 'Маркетинг услуг', kh: 'Кураторский час', ek: 'Эконометрика', imk: 'Интегрированные маркетинговые коммуникации', mi: 'Маркетинг инноваций', fsa: 'Функционально-стоимостный анализ', mia: 'Маркетинговые исследования и аналитика', lg: 'Логистика', fk: 'Физическая культура', dia: 'Деловой иностранный язык' };
 const TEACH = { sv: 'Сверлов А.С.', sh: 'Шумских И.С.', me: 'Мельникова Л.А.', mk: 'Миксюк С.Ф.', st: 'Стасева А.А.', pu: 'Пушкин С.А.', le: 'Левчук К.А.', an: 'Анкинович Ю.Е.', tr: 'Трушкевич Н.Л.', sy: 'Синявская О.А.', pr: 'Протасеня В.С.', bu: 'Бутеня В.Е.', ko: 'Ковалева О.Л.', ar: 'Артёменко С.В.', vo: 'Волонтей А.В.', de: 'Демченко Е.В.', ve: 'Верниковская О.В.', ya: 'Яровская Е.С.', kp: 'Коптур Д.В.', lp: 'Лапина С.Н.', kv: 'Коротышевская В.Д.', ki: 'Кирильчик Т.К.', ch: 'Черник Н.Н.' };
@@ -184,11 +184,12 @@ syncEng();
 
 /* ---------- Расписание ---------- */
 const pinIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+let slideDir = 0;
 let selDay = (() => { const d = new Date().getDay(); return d >= 1 && d <= 6 ? d : 1; })();
 const lessonHtml = (l, date) => `<div class="lesson inner">
     <div class="tcol"><b>${esc(l.start)}</b><span>${esc(l.end)}</span></div><div class="vdiv"></div>
     <div style="min-width:0;flex:1">
-      <div class="flex items-start justify-between gap-2">
+      <div class="lrow flex items-start justify-between gap-2">
         <${l.base ? 'div' : 'button data-edit-lesson="' + l.id + '"'} class="lname">${esc(l.name)}</${l.base ? 'div' : 'button'}>
         <span class="tbadge ${BCLS[l.type] || 'b-pz'}">${esc(l.type)}</span>
       </div>
@@ -207,7 +208,7 @@ function renderSchedule() {
   const byDay = d => lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((x, y) => x.start.localeCompare(y.start));
   $('#dayStrip').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { const date = addDays(mon, d - 1);
     return `<button data-sday="${d}" class="dchip${d === selDay ? ' sel' : ''}${date.toDateString() === now.toDateString() ? ' tod' : ''}"><span class="dn">${WDS[d]}</span><span class="dd">${date.getDate()}</span><i class="${byDay(d).length ? '' : 'off'}"></i></button>`; }).join('');
-  $('#grid').className = 'grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6' + (anim ? ' enter' : '');
+  $('#grid').className = anim && !slideDir ? 'enter' : '';
   $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { try {
     const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString(), items = byDay(d);
     return `<div class="daycol card${d === selDay ? ' sel' : ''}${isToday ? ' today' : ''}" style="--i:${d}">
@@ -215,7 +216,10 @@ function renderSchedule() {
       <div style="display:flex;flex-direction:column;gap:10px">${items.length ? items.map(l => lessonHtml(l, date)).join('') : EMPTY}</div>
     </div>`;
   } catch (err) { console.error(err); return `<div class="daycol card sel"><div class="dayhead"><h3>${DAYS[d]}</h3></div>${EMPTY}</div>`; } }).join('');
-  $$('[data-sday]').forEach(b => b.onclick = () => { selDay = +b.dataset.sday; renderSchedule(); });
+  $$('[data-sday]').forEach(b => b.onclick = () => { const d = +b.dataset.sday; slideDir = Math.sign(d - selDay); selDay = d; renderSchedule(); });
+  const cur = document.querySelector('.daycol.sel');
+  if (slideDir && cur) cur.classList.add(slideDir > 0 ? 'slide-l' : 'slide-r');
+  slideDir = 0;
   $$('[data-edit-lesson]').forEach(b => b.onclick = () => openLesson(b.dataset.editLesson));
   $$('[data-hw-lesson]').forEach(b => b.onclick = () => {
     const l = allLessons().find(x => x.id === b.dataset.hwLesson);
@@ -224,6 +228,24 @@ function renderSchedule() {
   });
   renderHero();
 }
+// Смена дня горизонтальными свайпами (только там, где виден один день: < 1024px)
+function goDay(delta) {
+  let d = selDay + delta, w = week;
+  if (d > 6) { if (week >= WEEKS_COUNT) return; d = 1; w++; } // с субботы — на понедельник следующей недели
+  else if (d < 1) { if (week <= 1) return; d = 6; w--; }
+  slideDir = delta; selDay = d; week = w; renderSchedule();
+}
+(function () {
+  const g = $('#grid'); let sx = 0, sy = 0, on = false;
+  g.addEventListener('touchstart', e => { on = innerWidth < 1024 && e.touches.length === 1; if (on) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } }, { passive: true });
+  g.addEventListener('touchcancel', () => { on = false; }, { passive: true });
+  g.addEventListener('touchend', e => {
+    if (!on) return; on = false;
+    const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy)) goDay(dx < 0 ? 1 : -1); // свайп влево — следующий день, вправо — предыдущий; вертикальный скролл игнорируется
+  }, { passive: true });
+})();
+
 function renderHero() {
   const now = new Date(), wd = now.getDay(), cw = Math.floor((mondayOf(now) - semMon) / 6048e5) + 1;
   const n = wd >= 1 && wd <= 6 ? allLessons().filter(l => l.day === wd && matchWeek(l, cw) && subOk(l)).length : 0;
@@ -231,7 +253,7 @@ function renderHero() {
 }
 
 const lessonDlg = $('#lessonDlg'), lessonForm = $('#lessonForm');
-$('#slotSel').innerHTML = BELLS.map(([n, s, e]) => `<option value="${s}-${e}">${n}: ${s} – ${e}</option>`).join('') + '<option value="other">Другое время (ввести вручную)</option>';
+$('#slotSel').innerHTML = BELLS.map(([n, s, e]) => `<option value="${s}-${e}">${n}: ${s} – ${e}</option>`).join('') + '<option value="other">Другое время (вручную)</option>';
 function toggleSlot() { const o = $('#slotSel').value === 'other'; $('#timeWrap').classList.toggle('hidden', !o); lessonForm.start.required = lessonForm.end.required = o; }
 $('#slotSel').onchange = toggleSlot;
 function openLesson(id) {
