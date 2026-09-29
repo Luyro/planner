@@ -1,4 +1,4 @@
-const CACHE = 'planner-v8';
+const CACHE = 'planner-v9';
 const FILES = ['./', './index.html', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -27,6 +27,7 @@ self.addEventListener('fetch', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || './index.html';
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list =>
-    list.length ? list[0].focus() : clients.openWindow('./index.html')));
+    list.length ? list[0].focus() : clients.openWindow(url)));
 });

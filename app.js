@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -17,6 +17,8 @@ function boot() {
 const SEMESTER_START = '2026-09-01'; // первый учебный день семестра — при необходимости поправьте
 const WEEKS_COUNT = 16;
 const SLOTS = { A: ['11:15', '12:35'], B: ['13:05', '14:25'], C: ['14:35', '15:55'], D: ['16:05', '17:25'], E: ['17:45', '19:05'] };
+// Расписание звонков БГЭУ (можно править здесь): [название, начало, конец]
+const BELLS = [['1 пара', '08:30', '09:50'], ['2 пара', '10:05', '11:25'], ['3 пара', '11:40', '13:00'], ['4 пара', '13:30', '14:50'], ['5 пара', '15:05', '16:25'], ['6 пара', '16:35', '17:55'], ['7 пара', '18:05', '19:25']];
 const TYPES = { K: 'ЛК', P: 'ПЗ', L: 'ЛР', Z: 'ЗЧ', N: 'ЗН' };
 const SUBJ = { sm: 'Стратегический маркетинг', mu: 'Маркетинг услуг', kh: 'Кураторский час', ek: 'Эконометрика', imk: 'Интегрированные маркетинговые коммуникации', mi: 'Маркетинг инноваций', fsa: 'Функционально-стоимостный анализ', mia: 'Маркетинговые исследования и аналитика', lg: 'Логистика', fk: 'Физическая культура', dia: 'Деловой иностранный язык' };
 const TEACH = { sv: 'Сверлов А.С.', sh: 'Шумских И.С.', me: 'Мельникова Л.А.', mk: 'Миксюк С.Ф.', st: 'Стасева А.А.', pu: 'Пушкин С.А.', le: 'Левчук К.А.', an: 'Анкинович Ю.Е.', tr: 'Трушкевич Н.Л.', sy: 'Синявская О.А.', pr: 'Протасеня В.С.', bu: 'Бутеня В.Е.', ko: 'Ковалева О.Л.', ar: 'Артёменко С.В.', vo: 'Волонтей А.В.', de: 'Демченко Е.В.', ve: 'Верниковская О.В.', ya: 'Яровская Е.С.', kp: 'Коптур Д.В.', lp: 'Лапина С.Н.', kv: 'Коротышевская В.Д.', ki: 'Кирильчик Т.К.', ch: 'Черник Н.Н.' };
@@ -229,22 +231,29 @@ function renderHero() {
 }
 
 const lessonDlg = $('#lessonDlg'), lessonForm = $('#lessonForm');
+$('#slotSel').innerHTML = BELLS.map(([n, s, e]) => `<option value="${s}-${e}">${n}: ${s} – ${e}</option>`).join('') + '<option value="other">Другое время (ввести вручную)</option>';
+function toggleSlot() { const o = $('#slotSel').value === 'other'; $('#timeWrap').classList.toggle('hidden', !o); lessonForm.start.required = lessonForm.end.required = o; }
+$('#slotSel').onchange = toggleSlot;
 function openLesson(id) {
   const l = myLessons.find(x => x.id === id);
   lessonForm.reset();
   lessonForm.id.value = l ? l.id : '';
   $('#lessonTitle').textContent = l ? 'Редактировать пару' : 'Новая пара';
   $('#lessonDel').classList.toggle('hidden', !l);
-  if (l) { for (const k of ['day', 'start', 'end', 'name', 'teacher', 'room', 'type']) lessonForm[k].value = l[k]; lessonForm.parity.value = l.parity || ''; }
-  else { const d = new Date().getDay(); lessonForm.day.value = d >= 1 && d <= 6 ? d : 1; }
-  lessonDlg.showModal();
+  $('#slotSel').value = `${BELLS[0][1]}-${BELLS[0][2]}`;
+  if (l) {
+    for (const k of ['day', 'start', 'end', 'name', 'teacher', 'room', 'type']) lessonForm[k].value = l[k];
+    lessonForm.parity.value = l.parity || '';
+    const k = l.start + '-' + l.end; $('#slotSel').value = BELLS.some(b => b[1] + '-' + b[2] === k) ? k : 'other';
+  } else { const d = new Date().getDay(); lessonForm.day.value = d >= 1 && d <= 6 ? d : 1; }
+  toggleSlot(); lessonDlg.showModal();
 }
 $('#addLesson').onclick = () => openLesson();
 $('#fab').onclick = () => (tab === 'schedule' ? openLesson() : openHw());
 lessonForm.onsubmit = e => {
   e.preventDefault();
-  const f = lessonForm;
-  const data = { id: f.id.value || uid(), day: +f.day.value, start: f.start.value, end: f.end.value, name: f.name.value.trim(), teacher: f.teacher.value.trim(), room: f.room.value.trim(), type: f.type.value, parity: f.parity.value || undefined };
+  const f = lessonForm, [st, en] = $('#slotSel').value === 'other' ? [f.start.value, f.end.value] : $('#slotSel').value.split('-');
+  const data = { id: f.id.value || uid(), day: +f.day.value, start: st, end: en, name: f.name.value.trim(), teacher: f.teacher.value.trim(), room: f.room.value.trim(), type: f.type.value, parity: f.parity.value || undefined };
   const i = myLessons.findIndex(x => x.id === data.id);
   if (i >= 0) myLessons[i] = data; else myLessons.push(data);
   save(key('lessons'), myLessons); lessonDlg.close(); renderSchedule();
@@ -495,49 +504,81 @@ function remLabel(h) {
 }
 
 /* ---------- Уведомления ---------- */
+const notifState = () => !('Notification' in window) ? 'unsupported' : Notification.permission; // default | granted | denied | unsupported
 function updateNotifBtn() {
-  const b = $('#notifBtn'), t = $('#notifTxt');
-  if (!('Notification' in window)) { t.textContent = 'Нет уведомлений'; b.disabled = true; b.title = 'Уведомления недоступны'; return; }
-  const on = Notification.permission === 'granted';
+  const st = notifState(), on = st === 'granted', b = $('#notifBtn'), t = $('#notifTxt');
   b.dataset.on = on ? '1' : '0';
-  t.textContent = on ? 'Напоминания включены' : Notification.permission === 'denied' ? 'Заблокировано' : 'Включить напоминания';
+  t.textContent = on ? 'Напоминания включены' : st === 'denied' ? 'Заблокировано' : st === 'unsupported' ? 'Недоступно' : 'Включить напоминания';
   b.title = t.textContent; b.setAttribute('aria-label', t.textContent);
+  $('#notifBanner').hidden = on || localStorage.getItem('notifHide') === '1';
+  $('#notifMsg').textContent = st === 'denied' ? 'Уведомления заблокированы. Разрешите их в настройках сайта (значок замка в адресной строке) или приложения и перезагрузите страницу.'
+    : st === 'unsupported' ? 'Этот браузер не поддерживает уведомления. На iPhone откройте приложение с иконки на экране «Домой» (iOS 16.4 и новее).'
+    : 'Чтобы получать напоминания о дедлайнах, разрешите уведомления.';
+  $('#notifAsk').hidden = st !== 'default';
 }
-$('#notifBtn').onclick = async () => {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'denied') return alert('Уведомления заблокированы. Разрешите их в настройках сайта в браузере.');
-  await Notification.requestPermission();
+async function askNotif() {
+  localStorage.removeItem('notifHide');
+  if (notifState() === 'default') { try { await Notification.requestPermission(); } catch (e) { console.error(e); } }
   updateNotifBtn(); checkReminders();
-};
-async function notify(title, body) {
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) return reg.showNotification(title, { body, icon: 'icon-192.png', tag: title + body });
-  } catch {}
-  new Notification(title, { body });
 }
+$('#notifBtn').onclick = askNotif; $('#notifAsk').onclick = askNotif;
+$('#notifHide').onclick = () => { localStorage.setItem('notifHide', '1'); updateNotifBtn(); };
+
+// Отправка через Service Worker (на телефонах new Notification() блокируется); запасной вариант — обычный Notification
+async function notify(title, body, tag) {
+  const opts = { body, icon: 'icon-192.png', badge: 'icon-192.png', tag, data: { url: './index.html' } };
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((_, no) => setTimeout(() => no(new Error('SW не готов')), 3000))]);
+      await reg.showNotification(title, opts); return;
+    } catch (e) { console.warn('Уведомление через SW не удалось:', e); }
+  }
+  new Notification(title, opts);
+}
+const minute = t => Math.floor(t / 60000); // сравнение с точностью до минуты
 function checkReminders() {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const now = Date.now(); let changed = false;
+  if (notifState() !== 'granted') return;
+  const now = minute(Date.now());
   homework.forEach(h => {
     const rt = remindAt(h);
     if (h.done || !rt) return; // «Не напоминать» — уведомлений нет вообще
     h.n = h.n || {};
-    const due = new Date(h.due).getTime();
-    if (now >= rt.getTime() && now < due && !h.n.rem) { h.n.rem = 1; changed = true; notify('Напоминание о ДЗ', `${h.subject}: ${h.text} — ${timeLeft(h.due).text}`); }
-    if (now >= due && now < due + 36e5 && !h.n.due) { h.n.due = 1; changed = true; notify('Срок сдачи наступил', `${h.subject}: ${h.text}`); }
+    const due = minute(new Date(h.due).getTime());
+    const fire = (flag, title, body) => {
+      h.n[flag] = 1; save(key('homework'), homework);
+      notify(title, body, `hw-${h.id}-${flag}`).catch(e => { console.error(e); h.n[flag] = 0; save(key('homework'), homework); }); // не вышло — повторим на следующей проверке
+    };
+    if (now >= minute(rt.getTime()) && now < due && !h.n.rem) fire('rem', 'Напоминание о ДЗ', `${h.subject}: ${h.text} — ${timeLeft(h.due).text}`);
+    if (now >= due && now < due + 60 && !h.n.due) fire('due', 'Срок сдачи наступил', `${h.subject}: ${h.text}`);
   });
-  if (changed) save(key('homework'), homework);
+}
+
+/* ---------- Свайп шторок (телефон) ---------- */
+function bindSheet(dlg) {
+  const sheet = dlg.querySelector('.sheet'); let y0 = null, dy = 0, t0 = 0, grab = false;
+  const reset = () => { sheet.style.transform = ''; sheet.style.transition = ''; };
+  const dismiss = () => { sheet.style.transition = 'transform .25s ease'; sheet.style.transform = 'translateY(100%)'; setTimeout(() => { dlg.close(); reset(); }, 230); };
+  dlg.addEventListener('close', reset);
+  $$('.grab, h3', sheet).forEach(z => {
+    z.addEventListener('touchstart', e => { if (innerWidth >= 768) return; y0 = e.touches[0].clientY; dy = 0; t0 = Date.now(); grab = !!e.target.closest('.grab'); sheet.style.transition = 'none'; }, { passive: true });
+    z.addEventListener('touchmove', e => { if (y0 === null) return; dy = Math.max(0, e.touches[0].clientY - y0); sheet.style.transform = `translateY(${dy}px)`; e.preventDefault(); }, { passive: false });
+    z.addEventListener('touchend', () => {
+      if (y0 === null) return; y0 = null;
+      if (dy > 90 || (grab && dy < 8 && Date.now() - t0 < 400)) dismiss(); // свайп вниз >90px или тап по полоске
+      else { sheet.style.transition = 'transform .2s ease'; sheet.style.transform = ''; setTimeout(() => { sheet.style.transition = ''; }, 220); }
+    });
+  });
 }
 
 /* ---------- Запуск ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error); // регистрируем до первой проверки напоминаний
+bindSheet($('#lessonDlg')); bindSheet($('#hwDlg'));
 [applyTheme, updateNotifBtn, () => showTab(tab), renderSchedule, renderHw, checkReminders].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
 const mv = document.querySelector('meta[name=app-version]');
 if (!mv || mv.content !== APP_VERSION) banner('index.html и app.js от разных версий: загрузите оба файла на GitHub и обновите страницу (Ctrl+F5).');
 else if (missing.length) banner('В index.html не найдены элементы: ' + [...new Set(missing)].join(', '));
-setInterval(() => { renderHw(); checkReminders(); }, 60000);
+setInterval(() => { renderHw(); checkReminders(); }, 30000); // проверка дедлайнов каждые 30 секунд
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderSchedule(); renderHw(); checkReminders(); } });
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error);
 
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
