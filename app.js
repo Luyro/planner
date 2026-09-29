@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '7';
+const APP_VERSION = '8';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -125,7 +125,7 @@ let tab = load('tab', 'schedule');
 let filter = 'all';
 
 const DAYS = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
-const EMPTY = '<div class="inner rounded-xl p-4 text-center text-sm sub" style="border-style:dashed">На этот день занятий нет или расписание не заполнено</div>';
+const EMPTY = '<div class="empty">На этот день занятий нет или расписание не заполнено</div>';
 const BCLS = { 'ЛК': 'b-lk', 'ПЗ': 'b-pz', 'ЛР': 'b-lr', 'ЗЧ': 'b-zc', 'ЗН': 'b-zn' };
 const allLessons = () => ALL_SCHEDULES[group].map((l, i) => ({ ...l, id: 's' + i, base: true })).concat(myLessons);
 let subSel = load('sub', '0');
@@ -139,7 +139,7 @@ const matchWeek = (l, n) => l.weeks ? l.weeks.includes(n) : l.parity === 'odd' ?
 function applyTheme() {
   const t = localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   document.documentElement.classList.toggle('dark', t === 'dark');
-  $('meta[name=theme-color]').content = t === 'dark' ? '#0f172a' : '#f8fafc';
+  $('meta[name=theme-color]').content = '#3e4593';
 }
 $('#themeBtn').onclick = () => {
   localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'light' : 'dark');
@@ -181,42 +181,51 @@ gs.onchange = e => { group = e.target.value; save('group', group); loadGroupData
 syncEng();
 
 /* ---------- Расписание ---------- */
+const pinIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>';
+let selDay = (() => { const d = new Date().getDay(); return d >= 1 && d <= 6 ? d : 1; })();
+const lessonHtml = (l, date) => `<div class="lesson inner">
+    <div class="tcol"><b>${esc(l.start)}</b><span>${esc(l.end)}</span></div><div class="vdiv"></div>
+    <div style="min-width:0;flex:1">
+      <div class="flex items-start justify-between gap-2">
+        <${l.base ? 'div' : 'button data-edit-lesson="' + l.id + '"'} class="lname">${esc(l.name)}</${l.base ? 'div' : 'button'}>
+        <span class="tbadge ${BCLS[l.type] || 'b-pz'}">${esc(l.type)}</span>
+      </div>
+      ${l.room || l.teacher || l.sub ? `<div class="lmeta">${pinIcon}<span>${[l.room && 'к/ауд ' + esc(l.room), esc(l.teacher), l.sub && subLabel(l.sub)].filter(Boolean).join(' · ')}</span></div>` : ''}
+      <button data-hw-lesson="${l.id}" data-date="${date.getTime()}" class="hwbtn">+ ДЗ</button>
+    </div>
+  </div>`;
 function renderSchedule() {
   $('#weekSel').value = week;
   $('#prevWeek').disabled = week <= 1; $('#nextWeek').disabled = week >= WEEKS_COUNT;
   const mon = addDays(semMon, (week - 1) * 7), now = new Date(), lessons = allLessons();
-  const key = week + '|' + subSel, anim = key !== lastKey; lastKey = key;
-  $('#grid').className = 'grid gap-3 md:grid-cols-2 lg:grid-cols-3' + (anim ? ' enter' : '');
+  const k = [week, subSel, engSel, group].join('|'), anim = k !== lastKey; lastKey = k;
+  const short = d => d.getDate() + ' ' + MON[d.getMonth()];
+  $('#weekTitle').textContent = 'Неделя ' + week;
+  $('#weekRange').textContent = short(mon) + ' – ' + short(addDays(mon, 5));
+  const byDay = d => lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((x, y) => x.start.localeCompare(y.start));
+  $('#dayStrip').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { const date = addDays(mon, d - 1);
+    return `<button data-sday="${d}" class="dchip${d === selDay ? ' sel' : ''}${date.toDateString() === now.toDateString() ? ' tod' : ''}"><span class="dn">${WDS[d]}</span><span class="dd">${date.getDate()}</span><i class="${byDay(d).length ? '' : 'off'}"></i></button>`; }).join('');
+  $('#grid').className = 'grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6' + (anim ? ' enter' : '');
   $('#grid').innerHTML = [1, 2, 3, 4, 5, 6].map(d => { try {
-    const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString();
-    const items = lessons.filter(l => l.day === d && matchWeek(l, week) && subOk(l)).sort((a, b) => a.start.localeCompare(b.start));
-    return `<div class="card rounded-md shadow-xs p-3 ${isToday ? 'today' : ''}" style="--i:${d}">
-      <div class="flex items-center justify-between mb-2 px-1">
-        <h3 class="font-semibold">${DAYS[d]}, <span class="sub font-normal">${fmt(date)}</span></h3>
-        ${isToday ? '<span class="text-xs px-2 py-0.5 rounded-full b-lk">Сегодня</span>' : ''}
-      </div>
-      <div class="space-y-2">
-        ${items.length ? items.map(l => `
-          <div class="inner rounded-md p-3">
-            <${l.base ? 'div' : 'button data-edit-lesson="' + l.id + '"'} class="block w-full text-left">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs sub">${esc(l.start)}–${esc(l.end)}</span>
-                <span class="text-xs font-medium px-2 py-0.5 rounded-full ${BCLS[l.type] || 'b-pz'}">${esc(l.type)}</span>
-              </div>
-              <div class="font-semibold mt-1" style="color:var(--tx)">${esc(l.name)}</div>
-              <div class="text-xs sub">${esc(l.teacher)}${l.teacher && l.room ? ' · ' : ''}${l.room ? 'к/ауд ' + esc(l.room) : ''}${l.sub ? ' · ' + subLabel(l.sub) : ''}</div>
-            </${l.base ? 'div' : 'button'}>
-            <button data-hw-lesson="${l.id}" data-date="${date.getTime()}" class="btn2 mt-2 text-xs px-2 py-1 rounded-md">+ ДЗ</button>
-          </div>`).join('') : EMPTY}
-      </div>
+    const date = addDays(mon, d - 1), isToday = date.toDateString() === now.toDateString(), items = byDay(d);
+    return `<div class="daycol card${d === selDay ? ' sel' : ''}${isToday ? ' today' : ''}" style="--i:${d}">
+      <div class="dayhead"><h3>${DAYS[d]}<span class="sub" style="font-weight:600;text-transform:none;font-size:12px"> · ${fmt(date)}</span></h3>${isToday ? '<span class="todaypill">Сегодня</span>' : ''}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">${items.length ? items.map(l => lessonHtml(l, date)).join('') : EMPTY}</div>
     </div>`;
-  } catch (err) { console.error(err); return `<div class="card rounded-md shadow-xs p-3"><h3 class="font-semibold mb-2">${DAYS[d]}</h3>${EMPTY}</div>`; } }).join('');
+  } catch (err) { console.error(err); return `<div class="daycol card sel"><div class="dayhead"><h3>${DAYS[d]}</h3></div>${EMPTY}</div>`; } }).join('');
+  $$('[data-sday]').forEach(b => b.onclick = () => { selDay = +b.dataset.sday; renderSchedule(); });
   $$('[data-edit-lesson]').forEach(b => b.onclick = () => openLesson(b.dataset.editLesson));
   $$('[data-hw-lesson]').forEach(b => b.onclick = () => {
     const l = allLessons().find(x => x.id === b.dataset.hwLesson);
     const [hh, mm] = l.start.split(':').map(Number), from = new Date(+b.dataset.date); from.setHours(hh, mm, 0, 0);
     openHw(null, { subject: l.name, type: l.type, from });
   });
+  renderHero();
+}
+function renderHero() {
+  const now = new Date(), wd = now.getDay(), cw = Math.floor((mondayOf(now) - semMon) / 6048e5) + 1;
+  const n = wd >= 1 && wd <= 6 ? allLessons().filter(l => l.day === wd && matchWeek(l, cw) && subOk(l)).length : 0;
+  $('#heroSub').innerHTML = `Сегодня ${n} ${plural(n, 'пара', 'пары', 'пар')} · горящих ДЗ: <b>${homework.filter(isHot).length}</b>`;
 }
 
 const lessonDlg = $('#lessonDlg'), lessonForm = $('#lessonForm');
@@ -231,6 +240,7 @@ function openLesson(id) {
   lessonDlg.showModal();
 }
 $('#addLesson').onclick = () => openLesson();
+$('#fab').onclick = () => (tab === 'schedule' ? openLesson() : openHw());
 lessonForm.onsubmit = e => {
   e.preventDefault();
   const f = lessonForm;
@@ -273,7 +283,7 @@ function renderHw() {
   const cardHtml = h => {
     const t = timeLeft(h.due), [uc, ut] = urgency(h);
     const due = new Date(h.due).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-    return `<div class="kcard inner rounded-md shadow-xs" data-id="${h.id}" tabindex="0" style="${h.done ? 'opacity:.55' : ''}">
+    return `<div class="kcard inner" data-id="${h.id}" tabindex="0" style="${h.done ? 'opacity:.55' : ''}">
       <div class="flex flex-col gap-2.5">
         <div class="flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
@@ -291,7 +301,7 @@ function renderHw() {
       </div>
     </div>`;
   };
-  const colHtml = (id, title, items, hint) => `<div class="kcol card shadow-xs" data-col="${id}">
+  const colHtml = (id, title, items, hint) => `<div class="kcol card" data-col="${id}">
       <div class="flex items-center gap-2.5 mb-2.5"><span class="font-semibold text-sm">${title}</span><span class="kb-count">${items.length}</span></div>
       <div class="kdrop">${items.length ? items.map(cardHtml).join('') : `<div class="kempty">${hint}</div>`}</div>
     </div>`;
@@ -304,6 +314,7 @@ function renderHw() {
     save(key('homework'), homework); renderHw();
   });
   $$('.kcard').forEach(bindCard);
+  renderHero();
 }
 function bindCard(card) {
   const id = card.dataset.id;
@@ -358,19 +369,71 @@ function nextLessons(subject, type, from, count = 2) {
   });
   return out.sort((x, y) => x - y).slice(0, count);
 }
-function toggleDue() { const m = $('#dueSel').value === 'manual'; $('#dueWrap').classList.toggle('hidden', !m); $('#dueInput').required = m; }
+const MON = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const WDS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+const dk = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+let hwDue = '', hwKind = 'lesson', hwNearest = '', calMonth = new Date();
+
 function toggleRem() { const m = $('#remSel').value === 'custom'; $('#remWrap').classList.toggle('hidden', !m); $('#remAt').required = m; }
-function refreshDue() {
-  const opts = [];
-  if (hwKeep) opts.push([hwKeep, 'Текущий срок: ' + fmtFull(new Date(hwKeep))]);
-  nextLessons(hwForm.subject.value, hwForm.type.value, hwFrom).forEach((d, i) =>
-    opts.push([toLocal(d), (i ? 'Следующее занятие: ' : 'Ближайшее занятие: ') + fmtFull(d)]));
-  opts.push(['manual', 'Выбрать свою дату и время вручную']);
-  $('#dueSel').innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
-  toggleDue();
+
+// Все даты занятий этого предмета и типа по расписанию выбранной группы: 'ГГГГ-ММ-ДД' -> время начала
+function occ(subject, type) {
+  const m = new Map(), list = allLessons().filter(l => l.name === subject && (!type || l.type === type) && subOk(l));
+  for (let w = 1; w <= WEEKS_COUNT; w++) list.forEach(l => {
+    if (!matchWeek(l, w)) return;
+    const k = dk(addDays(semMon, (w - 1) * 7 + l.day - 1));
+    if (!m.has(k) || l.start < m.get(k)) m.set(k, l.start);
+  });
+  return m;
 }
-hwForm.subject.onchange = hwForm.type.onchange = refreshDue;
-$('#dueSel').onchange = toggleDue;
+function renderDueBtn() {
+  const el = $('#dueText');
+  if (!hwDue) { el.textContent = 'Выберите срок сдачи'; return; }
+  const d = new Date(hwDue);
+  const pre = hwKind === 'keep' ? 'Текущий срок: ' : hwKind === 'custom' ? 'Свой срок: ' : hwDue === hwNearest ? 'Ближайшая пара: ' : 'Пара: ';
+  el.textContent = `${pre}${d.getDate()} ${MON[d.getMonth()]}, ${WDS[d.getDay()]} (${pad(d.getHours())}:${pad(d.getMinutes())})`;
+}
+function setDue(v, kind) { hwDue = v; hwKind = kind; renderDueBtn(); }
+function refreshDue() {
+  const n = nextLessons(hwForm.subject.value, hwForm.type.value, hwFrom, 1)[0];
+  hwNearest = n ? toLocal(n) : '';
+  $('#calTime').value = n ? pad(n.getHours()) + ':' + pad(n.getMinutes()) : '09:00';
+  if (hwKeep) setDue(hwKeep, 'keep'); else if (hwNearest) setDue(hwNearest, 'lesson'); else setDue('', 'custom');
+  if (!$('#cal').hidden) renderCal();
+}
+function closeCal() { $('#cal').hidden = true; $('#dueBtn').setAttribute('aria-expanded', 'false'); }
+function renderCal() {
+  const y = calMonth.getFullYear(), mo = calMonth.getMonth(), off = (new Date(y, mo, 1).getDay() + 6) % 7, dim = new Date(y, mo + 1, 0).getDate();
+  $('#calMonth').textContent = MONTHS[mo] + ' ' + y;
+  const marks = occ(hwForm.subject.value, hwForm.type.value), today = new Date(), tk = dk(today), sel = hwDue.slice(0, 10);
+  today.setHours(0, 0, 0, 0);
+  let html = '<span></span>'.repeat(off), count = 0;
+  for (let d = 1; d <= dim; d++) {
+    const dt = new Date(y, mo, d), k = dk(dt), has = marks.has(k), past = dt < today && k !== sel;
+    if (has && dt >= today) count++;
+    html += `<button type="button" data-cday="${k}" ${past ? 'disabled' : ''} class="cday${has ? ' has' : ''}${k === sel ? ' sel' : ''}${k === tk ? ' tod' : ''}"${has ? ` title="Пара в ${marks.get(k)}"` : ''}><span>${d}</span>${has ? '<i></i>' : ''}</button>`;
+  }
+  $('#calGrid').innerHTML = html;
+  const what = [hwForm.type.value, hwForm.subject.value].filter(Boolean).join(' · ');
+  $('#calLegend').textContent = `● Подсвечены дни занятий: ${what || 'выберите предмет'}. В этом месяце: ${count}`;
+  $$('[data-cday]', $('#calGrid')).forEach(b => b.onclick = () => pickDay(b.dataset.cday));
+}
+function pickDay(k) {
+  const t = occ(hwForm.subject.value, hwForm.type.value).get(k);
+  setDue(k + 'T' + (t || $('#calTime').value || '09:00'), t ? 'lesson' : 'custom');
+  $('#remSel').value = 'eve19'; toggleRem(); // предлагаем напомнить накануне вечером
+  closeCal();
+}
+$('#dueBtn').onclick = () => {
+  const open = $('#cal').hidden;
+  $('#cal').hidden = !open; $('#dueBtn').setAttribute('aria-expanded', String(open));
+  if (open) { calMonth = hwDue ? new Date(hwDue) : new Date(); calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1); renderCal(); }
+};
+$('#calPrev').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCal(); };
+$('#calNext').onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCal(); };
+$('#calTime').onchange = () => { if (hwKind === 'custom' && hwDue) setDue(hwDue.slice(0, 10) + 'T' + $('#calTime').value, 'custom'); };
+hwForm.subject.onchange = hwForm.type.onchange = () => { if (hwKind === 'lesson' || !hwDue) { hwKeep = ''; refreshDue(); } else if (!$('#cal').hidden) renderCal(); };
 $('#remSel').onchange = toggleRem;
 
 function openHw(id, preset) {
@@ -384,15 +447,14 @@ function openHw(id, preset) {
   hwForm.id.value = h ? h.id : '';
   $('#hwTitle').textContent = h ? 'Редактировать ДЗ' : 'Новое ДЗ';
   $('#hwDel').classList.toggle('hidden', !h);
-  $('#remSel').value = h ? (h.rem || 'd1') : 'd1';
+  $('#remSel').value = h ? (h.rem || 'd1') : 'eve19';
   $('#remAt').value = h && h.remAt || '';
   if (h) { hwForm.subject.value = h.subject; hwForm.type.value = h.type || ''; hwForm.text.value = h.text; hwForm.done.value = h.done; }
   else if (preset) { hwForm.subject.value = preset.subject; hwForm.type.value = preset.type; }
   const now = new Date();
   hwFrom = preset && preset.from > now ? preset.from : now;
   hwKeep = h ? h.due : '';
-  refreshDue();
-  $('#dueInput').value = h ? h.due : '';
+  closeCal(); refreshDue();
   toggleRem(); hwDlg.showModal();
 }
 $('#addHw').onclick = () => openHw();
@@ -400,7 +462,7 @@ hwForm.onsubmit = e => {
   e.preventDefault();
   const f = hwForm;
   if (!f.subject.value) return alert('Сначала добавьте пары в расписание.');
-  const due = $('#dueSel').value === 'manual' ? $('#dueInput').value : $('#dueSel').value;
+  const due = hwDue;
   if (!due) return alert('Укажите срок сдачи.');
   const rem = $('#remSel').value, remAt = rem === 'custom' ? $('#remAt').value : '';
   if (rem === 'custom' && !remAt) return alert('Укажите дату и время напоминания.');
@@ -423,6 +485,7 @@ function remindAt(h) {
   const due = new Date(h.due), m = h.rem || 'd1';
   if (m === 'none') return null;
   if (m === 'custom') return h.remAt ? new Date(h.remAt) : null;
+  if (m === 'eve19') { const d = new Date(due); d.setDate(d.getDate() - 1); d.setHours(19, 0, 0, 0); return d; }
   if (m === 'day8') { const d = new Date(due); d.setHours(8, 0, 0, 0); return d; }
   return new Date(due - (m === 'd2' ? 2 : 1) * 864e5);
 }
@@ -433,11 +496,12 @@ function remLabel(h) {
 
 /* ---------- Уведомления ---------- */
 function updateNotifBtn() {
-  const b = $('#notifBtn');
-  if (!('Notification' in window)) { b.textContent = 'Уведомления недоступны'; b.disabled = true; b.style.opacity = .5; return; }
+  const b = $('#notifBtn'), t = $('#notifTxt');
+  if (!('Notification' in window)) { t.textContent = 'Нет уведомлений'; b.disabled = true; b.title = 'Уведомления недоступны'; return; }
   const on = Notification.permission === 'granted';
-  b.textContent = on ? 'Напоминания включены' : Notification.permission === 'denied' ? 'Заблокировано в браузере' : 'Включить напоминания';
-  b.className = 'text-sm px-3 py-1.5 rounded-lg ' + (on ? 'btn2' : 'btn-main');
+  b.dataset.on = on ? '1' : '0';
+  t.textContent = on ? 'Напоминания включены' : Notification.permission === 'denied' ? 'Заблокировано' : 'Включить напоминания';
+  b.title = t.textContent; b.setAttribute('aria-label', t.textContent);
 }
 $('#notifBtn').onclick = async () => {
   if (!('Notification' in window)) return;
