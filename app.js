@@ -13,12 +13,13 @@ window.addEventListener('error', e => banner('Ошибка скрипта: ' + e
    Пока стоят значения YOUR_..., облако выключено и всё хранится только на устройстве.
    ===================================================================== */
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID'
+  apiKey: "AIzaSyCLtuI89PYvFh6zyg4gepIGKRKXulfgd5U",
+  authDomain: "luyroplanner.firebaseapp.com",
+  projectId: "luyroplanner",
+  storageBucket: "luyroplanner.firebasestorage.app",
+  messagingSenderId: "759222259134",
+  appId: "1:759222259134:web:3cb33a3e913db8884e7def",
+  measurementId: "G-XGB873NZSN"
 };
 
 /* =====================================================================
