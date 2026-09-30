@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Расписание</title>
-<meta name="app-version" content="11">
+<meta name="app-version" content="13">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#3e4593">
 <link rel="manifest" href="manifest.json">
@@ -18,9 +18,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Firebase Firestore (облачная синхронизация). defer: app.js стартует на DOMContentLoaded, уже после загрузки SDK -->
-<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
   /* Палитра референса: navy #19215f · indigo #3e4593 · periwinkle #8792ec · emerald #047857 (приглушённый) · pink #ff6297.
      Цвета темы заданы переменными — контраст не зависит от настроек Tailwind CDN. Раскладка — на Tailwind. */
@@ -58,7 +55,7 @@
   .htabs .tab-btn.active { background:var(--green); color:var(--ongreen); }
 
   /* Нижняя навигация (телефон) */
-  .bnav { position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); z-index:30; -webkit-transform:translateZ(0); transform:translateZ(0); will-change:transform; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:4px; padding:8px; border-radius:28px; background:var(--card); border:1px solid var(--bd); box-shadow:0 12px 32px rgba(15,21,71,.3); }
+  .bnav { position:fixed; z-index:50; left:16px; right:16px; max-width:28rem; margin:0 auto; bottom:calc(1rem + env(safe-area-inset-bottom,0px)); display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:4px; padding:8px; border-radius:28px; background:var(--card); border:1px solid var(--bd); box-shadow:0 12px 32px rgba(15,21,71,.3); }
   .bnav .tab-btn { display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 6px; border-radius:20px; font-size:11px; font-weight:800; color:var(--sub); transition:background-color .2s,color .2s; }
   .bnav .tab-btn.active { background:var(--green); color:var(--ongreen); }
   .fab { width:56px; height:56px; margin:-30px 10px 0; border-radius:9999px; background:var(--pink); color:#19215f; box-shadow:0 8px 20px rgba(255,98,151,.45); display:flex; align-items:center; justify-content:center; }
@@ -184,11 +181,28 @@
   .userbadge { display:inline-flex; align-items:center; height:40px; padding:0 14px; border-radius:9999px; background:rgba(255,255,255,.16); color:#fff; font-weight:800; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .mini-btn { height:32px; padding:0 12px; border-radius:9999px; background:rgba(255,255,255,.24); color:#fff; font-size:12px; font-weight:800; flex-shrink:0; }
   #loginName { padding:6px; height:auto; } #loginName option { padding:9px 10px; border-radius:10px; } #loginName option:checked { background:var(--green); color:#fff; }
-  #syncState[data-st="offline"] { color:#ffd97a; }
+
+  /* Телефон: высота приложения жёстко равна экрану, документ не прокручивается (тулбар Safari не «гуляет»).
+     Скроллится только #scroller; парящая панель position:fixed всегда на одном месте, снизу у контента запас под неё. */
+  html, body { margin:0; }
+  #app, #scroller { display:block; }
+  @media (max-width:767px) {
+    html, body { height:100%; overflow:hidden; }
+    #app { height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; overflow:hidden; display:flex; flex-direction:column; }
+    #scroller { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+    .mainpad { padding-bottom:calc(8rem + env(safe-area-inset-bottom,0px)); }
+  }
+  /* Перенос ДЗ и уведомления-«тосты» */
+  .chip-btn { height:40px; padding:0 14px; border-radius:9999px; background:transparent; color:var(--tx); border:2px dashed var(--fldbd); font-weight:700; font-size:13px; }
+  .chip-btn:hover { background:var(--btn); }
+  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(7rem + env(safe-area-inset-bottom,0px)); z-index:70; background:var(--hero); color:#fff; font-weight:700; font-size:13px; padding:12px 18px; border-radius:9999px; box-shadow:0 10px 28px rgba(0,0,0,.35); max-width:92vw; text-align:center; animation:up .3s ease both; }
+  @media (min-width:768px) { .toast { bottom:32px; } }
 </style>
 </head>
 <body>
 
+<div id="app">
+<div id="scroller">
 <header class="hero safe-t">
   <span class="blob g"></span><span class="blob p"></span>
   <div class="relative wrap mx-auto px-4 pt-4 pb-7 md:pb-9">
@@ -206,7 +220,6 @@
     </div>
     <h1 class="hello mt-6">Привет!</h1>
     <p id="heroSub" class="hero-sub mt-1"></p>
-    <p id="syncState" class="hero-sub" style="font-size:.74rem;font-weight:600;text-transform:none;opacity:.92;margin-top:6px;min-height:1em"></p>
   </div>
 </header>
 
@@ -251,10 +264,16 @@
       <button data-f="all" class="f-btn px-4 h-10 rounded-full">Все</button>
       <button data-f="hot" class="f-btn px-4 h-10 rounded-full">Горящие</button>
       <button data-f="done" class="f-btn px-4 h-10 rounded-full">Выполненные</button>
+      <span class="flex flex-wrap gap-2 ml-auto">
+        <button id="exportBtn" type="button" class="chip-btn" title="Скопировать список ДЗ в буфер обмена">⬆ Поделиться / Экспорт</button>
+        <button id="importBtn" type="button" class="chip-btn" title="Вставить код, полученный от одногруппника">⬇ Вставить / Импорт</button>
+      </span>
     </div>
     <div id="hwList"></div>
   </section>
 </main>
+
+</div><!-- /scroller -->
 
 <nav class="bnav" aria-label="Навигация">
   <button data-tab="schedule" class="tab-btn">
@@ -267,6 +286,7 @@
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>Домашка
   </button>
 </nav>
+</div><!-- /app -->
 
 <dialog id="lessonDlg">
   <form id="lessonForm" class="sheet">
@@ -352,6 +372,23 @@
     <button type="button" id="loginCancel" class="btn2 px-6 h-12 rounded-full text-sm" style="width:100%" hidden>Отмена</button>
   </form>
 </dialog>
+
+<dialog id="shareDlg">
+  <form id="shareForm" class="sheet" onsubmit="return false">
+    <div class="grab"></div>
+    <h3 id="shareTitle">Перенос ДЗ</h3>
+    <p id="shareHint" class="sub text-sm font-semibold"></p>
+    <textarea id="shareText" rows="5" class="fld" placeholder="DZ1:c:…" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" spellcheck="false" autocomplete="off"></textarea>
+    <div class="flex flex-wrap gap-2 pt-1">
+      <button type="button" id="sharePaste" class="btn2 px-4 h-12 rounded-full text-sm">Вставить из буфера</button>
+      <button type="button" id="shareCopy" class="btn2 px-4 h-12 rounded-full text-sm">Копировать</button>
+      <button type="button" data-close class="btn2 px-4 h-12 rounded-full text-sm ml-auto">Закрыть</button>
+      <button type="button" id="shareGo" class="btn-main px-6 h-12 rounded-full text-sm">Импортировать</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" hidden></div>
 
 <script src="app.js"></script>
 </body>

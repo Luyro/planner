@@ -1,4 +1,4 @@
-const CACHE = 'planner-v11';
+const CACHE = 'planner-v13';
 const FILES = ['./', './index.html', './app.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -16,8 +16,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const u = new URL(e.request.url), same = u.origin === self.location.origin;
-  // Чужие запросы обрабатываем только для статики; Firestore и остальное API идут напрямую (иначе ломается синхронизация)
-  if (!same && !['cdn.tailwindcss.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'www.gstatic.com'].includes(u.hostname)) return;
+  // Чужие запросы кэшируем только для статики (Tailwind и шрифты), остальное идёт напрямую
+  if (!same && !['cdn.tailwindcss.com', 'fonts.googleapis.com', 'fonts.gstatic.com'].includes(u.hostname)) return;
   const store = res => { if (res && (res.ok || res.type === 'opaque')) { const c = res.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); } return res; };
   if (same) {
     e.respondWith(fetch(e.request).then(store).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('./index.html'))));

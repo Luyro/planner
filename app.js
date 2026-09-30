@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '11';
+const APP_VERSION = '13';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -7,20 +7,6 @@ function banner(msg) {
   (document.querySelector('main') || document.body).prepend(d);
 }
 window.addEventListener('error', e => banner('Ошибка скрипта: ' + e.message));
-
-/* =====================================================================
-   ОБЛАКО: Firebase Firestore. Вставьте сюда свой firebaseConfig (Firebase Console → ⚙ → Project settings → Your apps → Web).
-   Пока стоят значения YOUR_..., облако выключено и всё хранится только на устройстве.
-   ===================================================================== */
-const firebaseConfig = {
-  apiKey: "AIzaSyCLtuI89PYvFh6zyg4gepIGKRKXulfgd5U",
-  authDomain: "luyroplanner.firebaseapp.com",
-  projectId: "luyroplanner",
-  storageBucket: "luyroplanner.firebasestorage.app",
-  messagingSenderId: "759222259134",
-  appId: "1:759222259134:web:3cb33a3e913db8884e7def",
-  measurementId: "G-XGB873NZSN"
-};
 
 /* =====================================================================
    СПИСКИ СТУДЕНТОВ ПО ГРУППАМ (вход без паролей — выбор себя из списка)
@@ -149,24 +135,26 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const DEFAULT_GROUP = '24ДММ-1';
-let student = load('student', null); // { group, name, id } — выбранный на этом устройстве студент
+let student = load('student', null); // { group, name } — выбранный на этом устройстве студент
 if (student && !(STUDENTS[student.group] || []).includes(student.name)) student = null;
 let group = student ? student.group : DEFAULT_GROUP;
-const key = k => k + ':' + (student ? student.id : 'guest'); // данные хранятся отдельно для каждого студента
-let myLessons = [], homework = [], hwTomb = [], lsTomb = []; // tomb — «надгробия» удалений для синхронизации
-function adoptLegacy() { // данные из старых версий приложения переходят первому вошедшему студенту
-  if (!student || localStorage.getItem('legacyTaken')) return;
-  ['homework', 'lessons'].forEach(k => { const old = localStorage.getItem(group === DEFAULT_GROUP ? k : k + ':' + group); if (old && localStorage.getItem(key(k)) === null) localStorage.setItem(key(k), old); });
-  localStorage.setItem('legacyTaken', '1');
+// Данные каждого студента лежат под своим ключом: hw_data_<группа>_<ФИО> (ДЗ и галочки), lessons_data_<группа>_<ФИО> (свои пары)
+const profile = () => student ? `${student.group}_${student.name}` : 'guest';
+const hwKey = () => 'hw_data_' + profile(), lsKey = () => 'lessons_data_' + profile();
+let myLessons = [], homework = [];
+const stamp = x => Math.max(Date.now(), ((x && x.u) || 0) + 1); // метка изменения строго растёт
+function saveHw() { save(hwKey(), homework); }
+function saveLs() { save(lsKey(), myLessons); }
+function migrate() { // данные прошлых версий приложения переходят в новый формат ключей
+  if (!student) return;
+  [['homework', hwKey()], ['lessons', lsKey()]].forEach(([old, nk]) => {
+    if (localStorage.getItem(nk) !== null) return;
+    const cand = [student.id && `${old}:${student.id}`, !localStorage.getItem('legacyTaken') && (group === DEFAULT_GROUP ? old : `${old}:${group}`)].filter(Boolean);
+    for (const c of cand) { const v = localStorage.getItem(c); if (v) { localStorage.setItem(nk, v); if (!String(c).includes(':') || c === `${old}:${group}`) localStorage.setItem('legacyTaken', '1'); break; } }
+  });
 }
-function loadUserData() {
-  myLessons = load(key('lessons'), []).filter(l => l.src !== 'site'); homework = load(key('homework'), []);
-  hwTomb = load(key('hwTomb'), []); lsTomb = load(key('lsTomb'), []);
-}
-const stamp = x => Math.max(Date.now(), ((x && x.u) || 0) + 1); // метка изменения строго растёт, даже если часы устройства отстают
-function saveHw(push = true) { save(key('homework'), homework); save(key('hwTomb'), hwTomb); if (push) cloudPush(); }
-function saveLs(push = true) { save(key('lessons'), myLessons); save(key('lsTomb'), lsTomb); if (push) cloudPush(); }
-adoptLegacy(); loadUserData();
+function loadUserData() { migrate(); myLessons = load(lsKey(), []).filter(l => l.src !== 'site'); homework = load(hwKey(), []); }
+loadUserData();
 let tab = load('tab', 'schedule');
 let filter = 'all';
 
@@ -323,7 +311,6 @@ lessonForm.onsubmit = e => {
 };
 $('#lessonDel').onclick = () => {
   if (!confirm('Удалить эту пару?')) return;
-  lsTomb.push({ id: lessonForm.id.value, del: 1, u: stamp(myLessons.find(x => x.id === lessonForm.id.value)) });
   myLessons = myLessons.filter(x => x.id !== lessonForm.id.value);
   saveLs(); lessonDlg.close(); renderSchedule();
 };
@@ -548,7 +535,6 @@ hwForm.onsubmit = e => {
 };
 $('#hwDel').onclick = () => {
   if (!confirm('Удалить это задание?')) return;
-  hwTomb.push({ id: hwForm.id.value, del: 1, u: stamp(homework.find(x => x.id === hwForm.id.value)) });
   homework = homework.filter(x => x.id !== hwForm.id.value);
   saveHw(); hwDlg.close(); renderHw();
 };
@@ -610,8 +596,8 @@ function checkReminders() {
     h.n = h.n || {};
     const due = minute(new Date(h.due).getTime());
     const fire = (flag, title, body) => {
-      h.n[flag] = 1; saveHw(false);
-      notify(title, body, `hw-${h.id}-${flag}`).catch(e => { console.error(e); h.n[flag] = 0; saveHw(false); }); // не вышло — повторим на следующей проверке
+      h.n[flag] = 1; saveHw();
+      notify(title, body, `hw-${h.id}-${flag}`).catch(e => { console.error(e); h.n[flag] = 0; saveHw(); }); // не вышло — повторим на следующей проверке
     };
     if (now >= minute(rt.getTime()) && now < due && !h.n.rem) fire('rem', 'Напоминание о ДЗ', `${h.subject}: ${h.text} — ${timeLeft(h.due).text}`);
     if (now >= due && now < due + 60 && !h.n.due) fire('due', 'Срок сдачи наступил', `${h.subject}: ${h.text}`);
@@ -636,10 +622,7 @@ function bindSheet(dlg) {
 }
 
 /* ---------- Вход («Кто ты?») ---------- */
-const translit = s => s.toLowerCase().replace(/[а-яё]/g, c => ({ а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' }[c] ?? '')).replace(/[^a-z0-9]/g, '');
-// ID документа в Firestore, например 24DMM1_avsievich_m (группа_фамилия_инициал имени)
-const makeId = (g, name) => { const [sur, first] = name.split(' '); return `${translit(g).toUpperCase()}_${translit(sur)}_${translit(first[0])}`; };
-const shortName = name => { const [s, f] = name.split(' '); return `${s} ${f[0]}.`; };
+const shortName = name => { const [s, f] = String(name || '').split(' '); return f ? `${s} ${f[0]}.` : (s || ''); };
 const loginDlg = $('#loginDlg');
 function fillLogin(selected) {
   const g = $('#loginGroup').value, q = $('#loginQ').value.trim().toLowerCase();
@@ -662,80 +645,74 @@ function updateUserUI() { $('#userBadge').textContent = student ? `👤 ${shortN
 $('#loginForm').onsubmit = e => {
   e.preventDefault();
   const g = $('#loginGroup').value, name = $('#loginName').value; if (!name) return;
-  student = { group: g, name, id: makeId(g, name) }; save('student', student);
-  group = g; lastKey = ''; adoptLegacy(); loadUserData(); syncEng(); updateUserUI();
-  loginDlg.close(); renderSchedule(); renderHw(); cloudStart();
+  student = { group: g, name }; save('student', student);
+  group = g; lastKey = ''; loadUserData(); syncEng(); updateUserUI();
+  loginDlg.close(); renderSchedule(); renderHw();
 };
 
-/* ---------- Облачная синхронизация (Firestore, users/{id студента}) ---------- */
-const cloudOn = () => typeof firebase !== 'undefined' && !/^YOUR/.test(firebaseConfig.projectId || 'YOUR') && !/^YOUR/.test(firebaseConfig.apiKey || 'YOUR');
-let db = null, unsub = null, pushTimer = null;
-function setSync(st) {
-  const m = { off: '☁ Облако не настроено — данные хранятся на этом устройстве', wait: '☁ Синхронизация…', ok: '☁ Синхронизировано', offline: '☁ Нет связи — сохранено на устройстве, отправим позже', none: '' };
-  const el = $('#syncState'); el.textContent = m[st] || ''; el.dataset.st = st;
+/* ---------- Перенос ДЗ: экспорт / импорт кодом ---------- */
+const toB64 = bytes => { let s = ''; bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const fromB64 = t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), c => c.charCodeAt(0));
+const pipeBytes = async (bytes, stream) => new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+async function encodeCode(obj) { // JSON -> deflate -> base64url; без поддержки сжатия — обычный base64
+  const raw = new TextEncoder().encode(JSON.stringify(obj));
+  if (typeof CompressionStream !== 'undefined') { try { return 'DZ1:c:' + toB64(await pipeBytes(raw, new CompressionStream('deflate-raw'))); } catch (e) { console.warn(e); } }
+  return 'DZ1:p:' + toB64(raw);
 }
-// Слияние по id: побеждает запись с большей меткой u (последнее изменение); удаление — запись-«надгробие» del:1
-function mergeLists(local, remote) {
-  const m = new Map();
-  [...local, ...remote].forEach(x => {
-    const o = m.get(x.id);
-    if (!o) return m.set(x.id, { ...x });
-    const win = (x.u || 0) > (o.u || 0) ? { ...x } : o, lose = win === o ? x : o;
-    if (!win.del && !lose.del && (win.n || lose.n) && win.due === lose.due && (win.rem || 'd1') === (lose.rem || 'd1')) win.n = { ...(lose.n || {}), ...(win.n || {}) }; // флаги «уже напомнили» объединяем
-    m.set(x.id, win);
-  });
-  return [...m.values()];
+async function decodeCode(text) {
+  const m = /DZ1:([cp]):([A-Za-z0-9_-]+)/.exec(String(text).replace(/\s+/g, ''));
+  if (!m) throw new Error('bad code');
+  let bytes = fromB64(m[2]);
+  if (m[1] === 'c') bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
-const clean = o => JSON.parse(JSON.stringify(o)); // Firestore не принимает undefined
-const payload = () => ({ homework: clean([...homework, ...hwTomb]), lessons: clean([...myLessons, ...lsTomb]), updatedAt: Date.now() });
-function applyRemote(d) {
-  const rh = d.homework || [], rl = d.lessons || [], cutoff = Date.now() - 60 * 864e5;
-  const mh = mergeLists([...homework, ...hwTomb], rh), ml = mergeLists([...myLessons, ...lsTomb], rl);
-  homework = mh.filter(x => !x.del); hwTomb = mh.filter(x => x.del && x.u > cutoff);
-  myLessons = ml.filter(x => !x.del); lsTomb = ml.filter(x => x.del && x.u > cutoff);
-  saveHw(false); saveLs(false); renderSchedule(); renderHw();
-  const norm = l => JSON.stringify([...l].sort((p, q) => p.id < q.id ? -1 : 1));
-  return norm(mh) !== norm(rh) || norm(ml) !== norm(rl); // true — у нас есть более свежие данные, их нужно отправить
+const cleanItem = x => { // импортируемые данные проверяем: чужой код не должен ломать приложение
+  if (!x || !x.id || !x.subject || isNaN(new Date(x.due))) return null;
+  return { id: String(x.id).slice(0, 40), subject: String(x.subject).slice(0, 120), type: ['ЛК', 'ПЗ', 'ЛР', 'ЗЧ', 'ЗН'].includes(x.type) ? x.type : '', text: String(x.text || '').slice(0, 2000), due: String(x.due).slice(0, 16), done: x.done ? 1 : 0, rem: ['eve19', 'day8', 'd1', 'd2', 'none', 'custom'].includes(x.rem) ? x.rem : 'd1', remAt: x.remAt ? String(x.remAt).slice(0, 16) : '', n: {}, u: Number(x.u) || Date.now() };
+};
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3400); }
+const shareDlg = $('#shareDlg');
+function openShare(mode, code) {
+  const imp = mode === 'import';
+  $('#shareTitle').textContent = imp ? 'Импорт ДЗ' : 'Экспорт ДЗ';
+  $('#shareHint').textContent = imp ? 'Вставьте код, скопированный у одногруппника (кнопка «Поделиться / Экспорт»).' : 'Автоматически скопировать не получилось. Выделите код и скопируйте его вручную.';
+  $('#shareText').value = code || ''; $('#shareText').readOnly = !imp;
+  $('#sharePaste').hidden = !imp; $('#shareGo').hidden = !imp; $('#shareCopy').hidden = imp;
+  shareDlg.showModal(); if (!imp) $('#shareText').select();
 }
-function cloudStart() {
-  if (unsub) { unsub(); unsub = null; }
-  if (!student) return setSync('none');
-  if (!cloudOn()) return setSync('off');
-  try {
-    if (!db) { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
-    setSync('wait');
-    unsub = db.collection('users').doc(student.id).onSnapshot(snap => { // realtime: изменения с другого устройства приходят сами
-      const needPush = applyRemote(snap.exists ? snap.data() : {});
-      if (snap.metadata && snap.metadata.fromCache) setSync(navigator.onLine ? 'wait' : 'offline'); else if (!localStorage.getItem(key('dirty'))) setSync('ok');
-      if (needPush || !snap.exists) cloudPush();
-    }, err => { console.warn('Firestore:', err); setSync('offline'); });
-  } catch (e) { console.error(e); setSync('offline'); }
+async function exportHw() {
+  if (!homework.length) return toast('Список ДЗ пуст — экспортировать нечего');
+  const code = await encodeCode({ v: 1, g: group, s: student ? student.name : '', hw: homework.map(({ n, ...h }) => h) });
+  try { await navigator.clipboard.writeText(code); toast(`Скопировано: ${homework.length} ${plural(homework.length, 'задача', 'задачи', 'задач')}. Вставьте код через «Вставить / Импорт»`); }
+  catch (e) { console.warn(e); openShare('export', code); }
 }
-function cloudPush() {
-  if (!student) return;
-  localStorage.setItem(key('dirty'), '1'); // пока не подтверждено облаком — данные лежат в LocalStorage
-  if (!cloudOn() || !db) return;
-  clearTimeout(pushTimer); pushTimer = setTimeout(doPush, 400);
-}
-function doPush() {
-  if (!db || !student || !cloudOn()) return;
-  const k = key('dirty'), p = db.collection('users').doc(student.id).set(payload());
-  Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])
-    .then(() => { localStorage.removeItem(k); setSync('ok'); })
-    .catch(e => { console.warn('Отправка не удалась:', e); setSync('offline'); });
-}
-const retryPush = () => { if (student && cloudOn() && db && localStorage.getItem(key('dirty'))) doPush(); };
-addEventListener('online', retryPush);
+$('#exportBtn').onclick = exportHw;
+$('#importBtn').onclick = () => openShare('import');
+$('#shareCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#shareText').value); shareDlg.close(); toast('Код скопирован'); } catch { $('#shareText').select(); } };
+$('#sharePaste').onclick = async () => {
+  try { $('#shareText').value = await navigator.clipboard.readText(); }
+  catch (e) { console.warn(e); toast('Буфер недоступен — нажмите в поле и выберите «Вставить»'); $('#shareText').focus(); }
+};
+$('#shareGo').onclick = async () => {
+  let d; try { d = await decodeCode($('#shareText').value); if (d.v !== 1 || !Array.isArray(d.hw)) throw new Error('format'); } catch (e) { return alert('Код не распознан. Скопируйте его целиком через «Поделиться / Экспорт».'); }
+  const items = d.hw.map(cleanItem).filter(Boolean);
+  if (!items.length) return alert('В коде нет задач.');
+  if (!confirm(`Код от ${d.s ? shortName(d.s) : 'одногруппника'}${d.g ? ' (' + d.g + ')' : ''}: ${items.length} ${plural(items.length, 'задача', 'задачи', 'задач')}.\nДобавить в профиль ${student ? shortName(student.name) : 'гостя'}?`)) return;
+  let add = 0, upd = 0;
+  items.forEach(it => { const i = homework.findIndex(x => x.id === it.id); if (i < 0) { homework.push(it); add++; } else if (it.u > (homework[i].u || 0)) { homework[i] = { ...it, n: homework[i].n || {} }; upd++; } });
+  saveHw(); shareDlg.close(); renderHw(); renderHero(); toast(`Импортировано: новых ${add}, обновлено ${upd}`);
+};
 
 /* ---------- Запуск ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error); // регистрируем до первой проверки напоминаний
-bindSheet($('#lessonDlg')); bindSheet($('#hwDlg'));
-[applyTheme, updateNotifBtn, () => showTab(tab), updateUserUI, renderSchedule, renderHw, checkReminders, cloudStart].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
+bindSheet($('#lessonDlg')); bindSheet($('#hwDlg')); bindSheet($('#shareDlg'));
+[applyTheme, updateNotifBtn, () => showTab(tab), updateUserUI, renderSchedule, renderHw, checkReminders].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
 if (!student) openLogin(false); // первый визит — окно «Кто ты?»
 const mv = document.querySelector('meta[name=app-version]');
 if (!mv || mv.content !== APP_VERSION) banner('index.html и app.js от разных версий: загрузите оба файла на GitHub и обновите страницу (Ctrl+F5).');
 else if (missing.length) banner('В index.html не найдены элементы: ' + [...new Set(missing)].join(', '));
-setInterval(() => { renderHw(); checkReminders(); retryPush(); }, 30000); // проверка дедлайнов каждые 30 секунд
+setInterval(() => { renderHw(); checkReminders(); }, 30000); // проверка дедлайнов каждые 30 секунд
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderSchedule(); renderHw(); checkReminders(); } });
 
 }
