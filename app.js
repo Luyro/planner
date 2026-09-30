@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '10';
+const APP_VERSION = '11';
 function banner(msg) {
   const d = document.createElement('div');
   d.style.cssText = 'margin:12px 0;padding:12px 14px;border-radius:12px;background:#7f1d1d;color:#fff;font-size:14px';
@@ -7,6 +7,36 @@ function banner(msg) {
   (document.querySelector('main') || document.body).prepend(d);
 }
 window.addEventListener('error', e => banner('Ошибка скрипта: ' + e.message));
+
+/* =====================================================================
+   ОБЛАКО: Firebase Firestore. Вставьте сюда свой firebaseConfig (Firebase Console → ⚙ → Project settings → Your apps → Web).
+   Пока стоят значения YOUR_..., облако выключено и всё хранится только на устройстве.
+   ===================================================================== */
+const firebaseConfig = {
+  apiKey: 'YOUR_API_KEY',
+  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
+  projectId: 'YOUR_PROJECT_ID',
+  storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+  messagingSenderId: 'YOUR_SENDER_ID',
+  appId: 'YOUR_APP_ID'
+};
+
+/* =====================================================================
+   СПИСКИ СТУДЕНТОВ ПО ГРУППАМ (вход без паролей — выбор себя из списка)
+   ===================================================================== */
+const STUDENTS = {
+  '24ДММ-1': [
+    'Авсиевич Михаил Максимович', 'Бекметьева Алина Александровна', 'Богуслав Никита Андреевич', 'Будревич Анастасия Леонидовна',
+    'Бусько Анастасия Дмитриевна', 'Быков Алексей Дмитриевич', 'Гринькина Дарья Сергеевна', 'Губаревич Яна Денисовна',
+    'Дмитриева Александра Юрьевна', 'Жаворонкова Виктория Алексеевна', 'Жвалевская Юлия Вячеславовна', 'Золотарь Анастасия Геннадьевна',
+    'Иванова Анна Андреевна', 'Карлович Эдуард Геннадьевич', 'Ковалёва Ангелина Юрьевна', 'Колосова Маргарита Андреевна',
+    'Колядко Никита Дмитриевич', 'Король София Владимировна', 'Короткова Полина Алексеевна', 'Крук Алина Денисовна',
+    'Кучук Александр Владимирович', 'Лемтюгова Карина Витальевна', 'Леончик Екатерина Алексеевна', 'Матвейчик Карина Васильевна'
+  ],
+  '24ДМВ-1': [
+    'Ковалёв Артём Владиславович' // добавляйте остальных студентов сюда
+  ]
+};
 
 function boot() {
 /* =====================================================================
@@ -118,11 +148,24 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const DEFAULT_GROUP = '24ДММ-1';
-let group = load('group', DEFAULT_GROUP); if (!ALL_SCHEDULES[group]) group = DEFAULT_GROUP;
-const key = k => group === DEFAULT_GROUP ? k : k + ':' + group; // данные каждой группы хранятся отдельно
-let myLessons, homework; // свои пары и ДЗ текущей группы
-function loadGroupData() { myLessons = load(key('lessons'), []).filter(l => l.src !== 'site'); homework = load(key('homework'), []); }
-loadGroupData();
+let student = load('student', null); // { group, name, id } — выбранный на этом устройстве студент
+if (student && !(STUDENTS[student.group] || []).includes(student.name)) student = null;
+let group = student ? student.group : DEFAULT_GROUP;
+const key = k => k + ':' + (student ? student.id : 'guest'); // данные хранятся отдельно для каждого студента
+let myLessons = [], homework = [], hwTomb = [], lsTomb = []; // tomb — «надгробия» удалений для синхронизации
+function adoptLegacy() { // данные из старых версий приложения переходят первому вошедшему студенту
+  if (!student || localStorage.getItem('legacyTaken')) return;
+  ['homework', 'lessons'].forEach(k => { const old = localStorage.getItem(group === DEFAULT_GROUP ? k : k + ':' + group); if (old && localStorage.getItem(key(k)) === null) localStorage.setItem(key(k), old); });
+  localStorage.setItem('legacyTaken', '1');
+}
+function loadUserData() {
+  myLessons = load(key('lessons'), []).filter(l => l.src !== 'site'); homework = load(key('homework'), []);
+  hwTomb = load(key('hwTomb'), []); lsTomb = load(key('lsTomb'), []);
+}
+const stamp = x => Math.max(Date.now(), ((x && x.u) || 0) + 1); // метка изменения строго растёт, даже если часы устройства отстают
+function saveHw(push = true) { save(key('homework'), homework); save(key('hwTomb'), hwTomb); if (push) cloudPush(); }
+function saveLs(push = true) { save(key('lessons'), myLessons); save(key('lsTomb'), lsTomb); if (push) cloudPush(); }
+adoptLegacy(); loadUserData();
 let tab = load('tab', 'schedule');
 let filter = 'all';
 
@@ -177,9 +220,6 @@ let lastKey = '';
 $('#engSel').value = engSel;
 $('#engSel').onchange = e => { engSel = e.target.value; save('eng', engSel); renderSchedule(); };
 const syncEng = () => { $('#engSel').hidden = !ALL_SCHEDULES[group].some(isEng); };
-const gs = $('#groupSel');
-gs.innerHTML = Object.keys(ALL_SCHEDULES).map(g => `<option>${g}</option>`).join(''); gs.value = group;
-gs.onchange = e => { group = e.target.value; save('group', group); loadGroupData(); lastKey = ''; syncEng(); renderSchedule(); renderHw(); };
 syncEng();
 
 /* ---------- Расписание ---------- */
@@ -275,15 +315,16 @@ $('#fab').onclick = () => (tab === 'schedule' ? openLesson() : openHw());
 lessonForm.onsubmit = e => {
   e.preventDefault();
   const f = lessonForm, [st, en] = $('#slotSel').value === 'other' ? [f.start.value, f.end.value] : $('#slotSel').value.split('-');
-  const data = { id: f.id.value || uid(), day: +f.day.value, start: st, end: en, name: f.name.value.trim(), teacher: f.teacher.value.trim(), room: f.room.value.trim(), type: f.type.value, parity: f.parity.value || undefined };
+  const data = { id: f.id.value || uid(), day: +f.day.value, start: st, end: en, name: f.name.value.trim(), teacher: f.teacher.value.trim(), room: f.room.value.trim(), type: f.type.value, parity: f.parity.value || undefined, u: stamp(myLessons.find(x => x.id === f.id.value)) };
   const i = myLessons.findIndex(x => x.id === data.id);
   if (i >= 0) myLessons[i] = data; else myLessons.push(data);
-  save(key('lessons'), myLessons); lessonDlg.close(); renderSchedule();
+  saveLs(); lessonDlg.close(); renderSchedule();
 };
 $('#lessonDel').onclick = () => {
   if (!confirm('Удалить эту пару?')) return;
+  lsTomb.push({ id: lessonForm.id.value, del: 1, u: stamp(myLessons.find(x => x.id === lessonForm.id.value)) });
   myLessons = myLessons.filter(x => x.id !== lessonForm.id.value);
-  save(key('lessons'), myLessons); lessonDlg.close(); renderSchedule();
+  saveLs(); lessonDlg.close(); renderSchedule();
 };
 
 /* ---------- Домашка ---------- */
@@ -341,8 +382,8 @@ function renderHw() {
     colHtml('done', 'Сделано', vis.filter(h => h.done).sort(byDue), 'Перетащите сюда выполненное');
   $$('[data-toggle]').forEach(c => c.onclick = e => {
     e.stopPropagation();
-    const h = homework.find(x => x.id === c.dataset.toggle); h.done = h.done ? 0 : 1;
-    save(key('homework'), homework); renderHw();
+    const h = homework.find(x => x.id === c.dataset.toggle); h.done = h.done ? 0 : 1; h.u = stamp(h);
+    saveHw(); renderHw();
   });
   $$('.kcard').forEach(bindCard);
   renderHero();
@@ -374,7 +415,7 @@ function bindCard(card) {
       ghost.remove(); over?.classList.remove('drop'); dragId = null;
       suppressClick = true; setTimeout(() => { suppressClick = false; }, 50);
       const h = homework.find(x => x.id === id), done = over && over.dataset.col === 'done' ? 1 : 0;
-      if (!cancelled && over && h.done !== done) { h.done = done; save(key('homework'), homework); }
+      if (!cancelled && over && h.done !== done) { h.done = done; h.u = stamp(h); saveHw(); }
       renderHw();
     };
     const up = ev => end(ev, false), cancel = ev => end(ev, true);
@@ -499,15 +540,16 @@ hwForm.onsubmit = e => {
   if (rem === 'custom' && !remAt) return alert('Укажите дату и время напоминания.');
   const old = homework.find(x => x.id === f.id.value);
   const same = old && old.due === due && (old.rem || 'd1') === rem && (old.remAt || '') === remAt;
-  const data = { id: f.id.value || uid(), subject: f.subject.value, type: f.type.value, text: f.text.value.trim(), due, done: +f.done.value, rem, remAt, n: same ? old.n : {} };
+  const data = { id: f.id.value || uid(), subject: f.subject.value, type: f.type.value, text: f.text.value.trim(), due, done: +f.done.value, rem, remAt, n: same ? old.n : {}, u: stamp(old) };
   const i = homework.findIndex(x => x.id === data.id);
   if (i >= 0) homework[i] = data; else homework.push(data);
-  save(key('homework'), homework); hwDlg.close(); renderHw(); checkReminders();
+  saveHw(); hwDlg.close(); renderHw(); checkReminders();
 };
 $('#hwDel').onclick = () => {
   if (!confirm('Удалить это задание?')) return;
+  hwTomb.push({ id: hwForm.id.value, del: 1, u: stamp(homework.find(x => x.id === hwForm.id.value)) });
   homework = homework.filter(x => x.id !== hwForm.id.value);
-  save(key('homework'), homework); hwDlg.close(); renderHw();
+  saveHw(); hwDlg.close(); renderHw();
 };
 $$('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
 
@@ -539,7 +581,7 @@ function updateNotifBtn() {
   $('#notifAsk').hidden = st !== 'default';
 }
 async function askNotif() {
-  localStorage.removeItem('notifHide');
+  localStorage.removeItem('notifHide'); updateNotifBtn(); // плашка возвращается сразу, не дожидаясь ответа на запрос разрешения
   if (notifState() === 'default') { try { await Notification.requestPermission(); } catch (e) { console.error(e); } }
   updateNotifBtn(); checkReminders();
 }
@@ -567,8 +609,8 @@ function checkReminders() {
     h.n = h.n || {};
     const due = minute(new Date(h.due).getTime());
     const fire = (flag, title, body) => {
-      h.n[flag] = 1; save(key('homework'), homework);
-      notify(title, body, `hw-${h.id}-${flag}`).catch(e => { console.error(e); h.n[flag] = 0; save(key('homework'), homework); }); // не вышло — повторим на следующей проверке
+      h.n[flag] = 1; saveHw(false);
+      notify(title, body, `hw-${h.id}-${flag}`).catch(e => { console.error(e); h.n[flag] = 0; saveHw(false); }); // не вышло — повторим на следующей проверке
     };
     if (now >= minute(rt.getTime()) && now < due && !h.n.rem) fire('rem', 'Напоминание о ДЗ', `${h.subject}: ${h.text} — ${timeLeft(h.due).text}`);
     if (now >= due && now < due + 60 && !h.n.due) fire('due', 'Срок сдачи наступил', `${h.subject}: ${h.text}`);
@@ -592,14 +634,107 @@ function bindSheet(dlg) {
   });
 }
 
+/* ---------- Вход («Кто ты?») ---------- */
+const translit = s => s.toLowerCase().replace(/[а-яё]/g, c => ({ а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'i', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' }[c] ?? '')).replace(/[^a-z0-9]/g, '');
+// ID документа в Firestore, например 24DMM1_avsievich_m (группа_фамилия_инициал имени)
+const makeId = (g, name) => { const [sur, first] = name.split(' '); return `${translit(g).toUpperCase()}_${translit(sur)}_${translit(first[0])}`; };
+const shortName = name => { const [s, f] = name.split(' '); return `${s} ${f[0]}.`; };
+const loginDlg = $('#loginDlg');
+function fillLogin(selected) {
+  const g = $('#loginGroup').value, q = $('#loginQ').value.trim().toLowerCase();
+  const list = [...(STUDENTS[g] || [])].sort((x, y) => x.localeCompare(y, 'ru')).filter(n => n.toLowerCase().includes(q));
+  $('#loginName').innerHTML = list.map(n => `<option>${esc(n)}</option>`).join('');
+  $('#loginName').selectedIndex = list.length ? Math.max(0, list.indexOf(selected)) : -1;
+  updateLoginBtn();
+}
+function updateLoginBtn() { const n = $('#loginName').value, b = $('#loginGo'); b.disabled = !n; b.textContent = n ? `Войти как ${n}` : 'Никого не найдено'; }
+function openLogin(canCancel) {
+  $('#loginGroup').innerHTML = Object.keys(STUDENTS).map(g => `<option>${g}</option>`).join('');
+  $('#loginGroup').value = student ? student.group : DEFAULT_GROUP; $('#loginQ').value = '';
+  fillLogin(student && student.name); $('#loginCancel').hidden = !canCancel; loginDlg.showModal();
+}
+$('#loginGroup').onchange = () => fillLogin(); $('#loginQ').oninput = () => fillLogin(); $('#loginName').onchange = updateLoginBtn;
+$('#loginCancel').onclick = () => loginDlg.close();
+loginDlg.addEventListener('cancel', e => { if (!student) e.preventDefault(); }); // без выбора студента закрыть окно нельзя
+$('#switchUser').onclick = () => openLogin(true);
+function updateUserUI() { $('#userBadge').textContent = student ? `👤 ${shortName(student.name)} (${student.group})` : '👤 Гость'; $('#userBadge').title = student ? student.name : ''; }
+$('#loginForm').onsubmit = e => {
+  e.preventDefault();
+  const g = $('#loginGroup').value, name = $('#loginName').value; if (!name) return;
+  student = { group: g, name, id: makeId(g, name) }; save('student', student);
+  group = g; lastKey = ''; adoptLegacy(); loadUserData(); syncEng(); updateUserUI();
+  loginDlg.close(); renderSchedule(); renderHw(); cloudStart();
+};
+
+/* ---------- Облачная синхронизация (Firestore, users/{id студента}) ---------- */
+const cloudOn = () => typeof firebase !== 'undefined' && !/^YOUR/.test(firebaseConfig.projectId || 'YOUR') && !/^YOUR/.test(firebaseConfig.apiKey || 'YOUR');
+let db = null, unsub = null, pushTimer = null;
+function setSync(st) {
+  const m = { off: '☁ Облако не настроено — данные хранятся на этом устройстве', wait: '☁ Синхронизация…', ok: '☁ Синхронизировано', offline: '☁ Нет связи — сохранено на устройстве, отправим позже', none: '' };
+  const el = $('#syncState'); el.textContent = m[st] || ''; el.dataset.st = st;
+}
+// Слияние по id: побеждает запись с большей меткой u (последнее изменение); удаление — запись-«надгробие» del:1
+function mergeLists(local, remote) {
+  const m = new Map();
+  [...local, ...remote].forEach(x => {
+    const o = m.get(x.id);
+    if (!o) return m.set(x.id, { ...x });
+    const win = (x.u || 0) > (o.u || 0) ? { ...x } : o, lose = win === o ? x : o;
+    if (!win.del && !lose.del && (win.n || lose.n) && win.due === lose.due && (win.rem || 'd1') === (lose.rem || 'd1')) win.n = { ...(lose.n || {}), ...(win.n || {}) }; // флаги «уже напомнили» объединяем
+    m.set(x.id, win);
+  });
+  return [...m.values()];
+}
+const clean = o => JSON.parse(JSON.stringify(o)); // Firestore не принимает undefined
+const payload = () => ({ homework: clean([...homework, ...hwTomb]), lessons: clean([...myLessons, ...lsTomb]), updatedAt: Date.now() });
+function applyRemote(d) {
+  const rh = d.homework || [], rl = d.lessons || [], cutoff = Date.now() - 60 * 864e5;
+  const mh = mergeLists([...homework, ...hwTomb], rh), ml = mergeLists([...myLessons, ...lsTomb], rl);
+  homework = mh.filter(x => !x.del); hwTomb = mh.filter(x => x.del && x.u > cutoff);
+  myLessons = ml.filter(x => !x.del); lsTomb = ml.filter(x => x.del && x.u > cutoff);
+  saveHw(false); saveLs(false); renderSchedule(); renderHw();
+  const norm = l => JSON.stringify([...l].sort((p, q) => p.id < q.id ? -1 : 1));
+  return norm(mh) !== norm(rh) || norm(ml) !== norm(rl); // true — у нас есть более свежие данные, их нужно отправить
+}
+function cloudStart() {
+  if (unsub) { unsub(); unsub = null; }
+  if (!student) return setSync('none');
+  if (!cloudOn()) return setSync('off');
+  try {
+    if (!db) { firebase.initializeApp(firebaseConfig); db = firebase.firestore(); }
+    setSync('wait');
+    unsub = db.collection('users').doc(student.id).onSnapshot(snap => { // realtime: изменения с другого устройства приходят сами
+      const needPush = applyRemote(snap.exists ? snap.data() : {});
+      if (snap.metadata && snap.metadata.fromCache) setSync(navigator.onLine ? 'wait' : 'offline'); else if (!localStorage.getItem(key('dirty'))) setSync('ok');
+      if (needPush || !snap.exists) cloudPush();
+    }, err => { console.warn('Firestore:', err); setSync('offline'); });
+  } catch (e) { console.error(e); setSync('offline'); }
+}
+function cloudPush() {
+  if (!student) return;
+  localStorage.setItem(key('dirty'), '1'); // пока не подтверждено облаком — данные лежат в LocalStorage
+  if (!cloudOn() || !db) return;
+  clearTimeout(pushTimer); pushTimer = setTimeout(doPush, 400);
+}
+function doPush() {
+  if (!db || !student || !cloudOn()) return;
+  const k = key('dirty'), p = db.collection('users').doc(student.id).set(payload());
+  Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 8000))])
+    .then(() => { localStorage.removeItem(k); setSync('ok'); })
+    .catch(e => { console.warn('Отправка не удалась:', e); setSync('offline'); });
+}
+const retryPush = () => { if (student && cloudOn() && db && localStorage.getItem(key('dirty'))) doPush(); };
+addEventListener('online', retryPush);
+
 /* ---------- Запуск ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error); // регистрируем до первой проверки напоминаний
 bindSheet($('#lessonDlg')); bindSheet($('#hwDlg'));
-[applyTheme, updateNotifBtn, () => showTab(tab), renderSchedule, renderHw, checkReminders].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
+[applyTheme, updateNotifBtn, () => showTab(tab), updateUserUI, renderSchedule, renderHw, checkReminders, cloudStart].forEach(f => { try { f(); } catch (e) { console.error(e); banner('Ошибка: ' + e.message); } });
+if (!student) openLogin(false); // первый визит — окно «Кто ты?»
 const mv = document.querySelector('meta[name=app-version]');
 if (!mv || mv.content !== APP_VERSION) banner('index.html и app.js от разных версий: загрузите оба файла на GitHub и обновите страницу (Ctrl+F5).');
 else if (missing.length) banner('В index.html не найдены элементы: ' + [...new Set(missing)].join(', '));
-setInterval(() => { renderHw(); checkReminders(); }, 30000); // проверка дедлайнов каждые 30 секунд
+setInterval(() => { renderHw(); checkReminders(); retryPush(); }, 30000); // проверка дедлайнов каждые 30 секунд
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderSchedule(); renderHw(); checkReminders(); } });
 
 }
